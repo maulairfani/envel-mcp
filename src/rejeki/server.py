@@ -1,9 +1,19 @@
+from dotenv import load_dotenv
 from fastmcp import FastMCP
-from rejeki.database import init_db
-from rejeki.tools import accounts, envelopes, transactions, scheduled, analytics, quick_add as _quick_add
+from fastmcp.dependencies import Depends
 
-init_db()
+from rejeki.auth import AuthMiddleware
+from rejeki.database import Database
+from rejeki.deps import get_user_db
+from rejeki.platform_db import init_platform_db
+from rejeki.tools import accounts, analytics, envelopes, scheduled, transactions
+from rejeki.tools import quick_add as _quick_add
+
+load_dotenv()
+init_platform_db()
+
 mcp = FastMCP("rejeki")
+mcp.add_middleware(AuthMiddleware())
 
 
 # ---------------------------------------------------------------------------
@@ -11,33 +21,33 @@ mcp = FastMCP("rejeki")
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def finance_add_account(name: str, type: str, initial_balance: float = 0) -> dict:
+def finance_add_account(name: str, type: str, initial_balance: float = 0, db: Database = Depends(get_user_db)) -> dict:
     """Tambah rekening baru. type: bank | ewallet | cash"""
-    return accounts.add_account(name, type, initial_balance)
+    return accounts.add_account(db, name, type, initial_balance)
 
 
 @mcp.tool()
-def finance_get_accounts() -> dict:
+def finance_get_accounts(db: Database = Depends(get_user_db)) -> dict:
     """List semua rekening beserta saldo dan total keseluruhan."""
-    return accounts.get_accounts()
+    return accounts.get_accounts(db)
 
 
 @mcp.tool()
-def finance_edit_account(id: int, name: str | None = None, type: str | None = None) -> dict:
+def finance_edit_account(id: int, name: str | None = None, type: str | None = None, db: Database = Depends(get_user_db)) -> dict:
     """Edit nama atau tipe rekening."""
-    return accounts.edit_account(id, name, type)
+    return accounts.edit_account(db, id, name, type)
 
 
 @mcp.tool()
-def finance_update_balance(id: int, balance: float) -> dict:
+def finance_update_balance(id: int, balance: float, db: Database = Depends(get_user_db)) -> dict:
     """Set saldo rekening langsung (rekonsiliasi manual)."""
-    return accounts.update_balance(id, balance)
+    return accounts.update_balance(db, id, balance)
 
 
 @mcp.tool()
-def finance_delete_account(id: int) -> dict:
+def finance_delete_account(id: int, db: Database = Depends(get_user_db)) -> dict:
     """Hapus rekening."""
-    return accounts.delete_account(id)
+    return accounts.delete_account(db, id)
 
 
 # ---------------------------------------------------------------------------
@@ -45,15 +55,15 @@ def finance_delete_account(id: int) -> dict:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def finance_get_groups() -> list:
+def finance_get_groups(db: Database = Depends(get_user_db)) -> list:
     """List semua kelompok envelope."""
-    return envelopes.get_groups()
+    return envelopes.get_groups(db)
 
 
 @mcp.tool()
-def finance_add_group(name: str, sort_order: int = 0) -> dict:
+def finance_add_group(name: str, sort_order: int = 0, db: Database = Depends(get_user_db)) -> dict:
     """Tambah kelompok envelope baru."""
-    return envelopes.add_group(name, sort_order)
+    return envelopes.add_group(db, name, sort_order)
 
 
 # ---------------------------------------------------------------------------
@@ -61,23 +71,23 @@ def finance_add_group(name: str, sort_order: int = 0) -> dict:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def finance_get_envelopes(period: str | None = None) -> dict:
+def finance_get_envelopes(period: str | None = None, db: Database = Depends(get_user_db)) -> dict:
     """
     Tampilkan semua envelope.
     Income sources: referensi untuk mencatat pemasukan.
     Expense envelopes per kelompok: carryover, assigned, activity, available, target.
     period format YYYY-MM (default bulan ini).
     """
-    return envelopes.get_envelopes(period)
+    return envelopes.get_envelopes(db, period)
 
 
 @mcp.tool()
-def finance_add_envelope(name: str, type: str, icon: str | None = None, group_id: int | None = None) -> dict:
+def finance_add_envelope(name: str, type: str, icon: str | None = None, group_id: int | None = None, db: Database = Depends(get_user_db)) -> dict:
     """
     Tambah envelope baru. type: income | expense.
     group_id untuk expense (opsional — tanpa group masuk kelompok 'Lainnya').
     """
-    return envelopes.add_envelope(name, type, icon, group_id)
+    return envelopes.add_envelope(db, name, type, icon, group_id)
 
 
 @mcp.tool()
@@ -86,15 +96,16 @@ def finance_edit_envelope(
     name: str | None = None,
     icon: str | None = None,
     group_id: int | None = None,
+    db: Database = Depends(get_user_db),
 ) -> dict:
     """Edit envelope. Isi hanya field yang mau diubah."""
-    return envelopes.edit_envelope(id, name, icon, group_id)
+    return envelopes.edit_envelope(db, id, name, icon, group_id)
 
 
 @mcp.tool()
-def finance_delete_envelope(id: int) -> dict:
+def finance_delete_envelope(id: int, db: Database = Depends(get_user_db)) -> dict:
     """Hapus envelope beserta semua data budgetnya."""
-    return envelopes.delete_envelope(id)
+    return envelopes.delete_envelope(db, id)
 
 
 @mcp.tool()
@@ -103,6 +114,7 @@ def finance_set_target(
     target_type: str,
     target_amount: float | None = None,
     target_deadline: str | None = None,
+    db: Database = Depends(get_user_db),
 ) -> dict:
     """
     Set funding target pada envelope expense.
@@ -110,18 +122,18 @@ def finance_set_target(
                  'goal'    — kumpulkan X sampai deadline.
     target_deadline format YYYY-MM-DD, hanya untuk goal.
     """
-    return envelopes.set_target(envelope_id, target_type, target_amount, target_deadline)
+    return envelopes.set_target(db, envelope_id, target_type, target_amount, target_deadline)
 
 
 @mcp.tool()
-def finance_assign_to_envelope(envelope_id: int, amount: float, period: str | None = None) -> dict:
+def finance_assign_to_envelope(envelope_id: int, amount: float, period: str | None = None, db: Database = Depends(get_user_db)) -> dict:
     """
     Assign uang dari Ready to Assign ke envelope.
     Ini operasi inti Rejeki: 'give every rupiah a job'.
     Memanggil ini lagi pada period yang sama akan menimpa assigned sebelumnya.
     period format YYYY-MM (default bulan ini).
     """
-    return envelopes.assign_to_envelope(envelope_id, amount, period)
+    return envelopes.assign_to_envelope(db, envelope_id, amount, period)
 
 
 @mcp.tool()
@@ -130,13 +142,14 @@ def finance_move_money(
     to_envelope_id: int,
     amount: float,
     period: str | None = None,
+    db: Database = Depends(get_user_db),
 ) -> dict:
     """
     Pindahkan uang antar envelope dalam satu period.
     Dipakai saat overspend di satu envelope dan perlu ditutup dari envelope lain.
     period format YYYY-MM (default bulan ini).
     """
-    return envelopes.move_money(from_envelope_id, to_envelope_id, amount, period)
+    return envelopes.move_money(db, from_envelope_id, to_envelope_id, amount, period)
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +157,7 @@ def finance_move_money(
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def finance_quick_add(text: str) -> dict:
+def finance_quick_add(text: str, db: Database = Depends(get_user_db)) -> dict:
     """
     GUNAKAN INI sebagai satu-satunya cara mencatat pengeluaran sehari-hari.
     JANGAN panggil finance_get_accounts atau finance_get_envelopes terlebih dahulu —
@@ -153,7 +166,7 @@ def finance_quick_add(text: str) -> dict:
     Otomatis deteksi: nominal, rekening, envelope, payee.
     Contoh input: 'makan ayam 15k gopay', 'bensin 50rb bca', 'kopi kenangan 35000 dana'
     """
-    return _quick_add.quick_add(text)
+    return _quick_add.quick_add(db, text)
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +183,7 @@ def finance_add_transaction(
     payee: str | None = None,
     memo: str | None = None,
     transaction_date: str | None = None,
+    db: Database = Depends(get_user_db),
 ) -> dict:
     """
     Catat transaksi dengan ID eksplisit. Gunakan ini hanya untuk:
@@ -181,7 +195,7 @@ def finance_add_transaction(
     transaction_date format YYYY-MM-DD (default hari ini).
     """
     return transactions.add_transaction(
-        amount, type, account_id, envelope_id, to_account_id, payee, memo, transaction_date
+        db, amount, type, account_id, envelope_id, to_account_id, payee, memo, transaction_date
     )
 
 
@@ -194,12 +208,13 @@ def finance_get_transactions(
     date_from: str | None = None,
     date_to: str | None = None,
     limit: int = 50,
+    db: Database = Depends(get_user_db),
 ) -> list:
     """
     Query transaksi. Semua filter opsional dan bisa dikombinasikan.
     payee: partial match (misal 'Grab' cocok dengan 'GrabFood').
     """
-    return transactions.get_transactions(account_id, envelope_id, type, payee, date_from, date_to, limit)
+    return transactions.get_transactions(db, account_id, envelope_id, type, payee, date_from, date_to, limit)
 
 
 @mcp.tool()
@@ -213,17 +228,18 @@ def finance_edit_transaction(
     payee: str | None = None,
     memo: str | None = None,
     transaction_date: str | None = None,
+    db: Database = Depends(get_user_db),
 ) -> dict:
     """Edit transaksi yang sudah ada. Isi hanya field yang mau diubah."""
     return transactions.edit_transaction(
-        id, amount, type, account_id, envelope_id, to_account_id, payee, memo, transaction_date
+        db, id, amount, type, account_id, envelope_id, to_account_id, payee, memo, transaction_date
     )
 
 
 @mcp.tool()
-def finance_delete_transaction(id: int) -> dict:
+def finance_delete_transaction(id: int, db: Database = Depends(get_user_db)) -> dict:
     """Hapus transaksi dan balikkan efeknya ke saldo rekening."""
-    return transactions.delete_transaction(id)
+    return transactions.delete_transaction(db, id)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +257,7 @@ def finance_add_scheduled_transaction(
     payee: str | None = None,
     memo: str | None = None,
     recurrence: str = "once",
+    db: Database = Depends(get_user_db),
 ) -> dict:
     """
     Jadwalkan transaksi di masa depan.
@@ -248,38 +265,38 @@ def finance_add_scheduled_transaction(
     scheduled_date format YYYY-MM-DD.
     """
     return scheduled.add_scheduled_transaction(
-        amount, type, account_id, scheduled_date, envelope_id, to_account_id, payee, memo, recurrence
+        db, amount, type, account_id, scheduled_date, envelope_id, to_account_id, payee, memo, recurrence
     )
 
 
 @mcp.tool()
-def finance_get_scheduled_transactions(include_inactive: bool = False) -> list:
+def finance_get_scheduled_transactions(include_inactive: bool = False, db: Database = Depends(get_user_db)) -> list:
     """List transaksi terjadwal, termasuk field days_until (berapa hari lagi)."""
-    return scheduled.get_scheduled_transactions(include_inactive)
+    return scheduled.get_scheduled_transactions(db, include_inactive)
 
 
 @mcp.tool()
-def finance_approve_scheduled_transaction(id: int) -> dict:
+def finance_approve_scheduled_transaction(id: int, db: Database = Depends(get_user_db)) -> dict:
     """
     Eksekusi scheduled transaction sebagai transaksi nyata.
     Jika recurring, otomatis jadwalkan ke occurrence berikutnya.
     """
-    return scheduled.approve_scheduled_transaction(id)
+    return scheduled.approve_scheduled_transaction(db, id)
 
 
 @mcp.tool()
-def finance_skip_scheduled_transaction(id: int) -> dict:
+def finance_skip_scheduled_transaction(id: int, db: Database = Depends(get_user_db)) -> dict:
     """
     Lewati occurrence ini tanpa mencatat transaksi.
     Jika recurring, maju ke occurrence berikutnya.
     """
-    return scheduled.skip_scheduled_transaction(id)
+    return scheduled.skip_scheduled_transaction(db, id)
 
 
 @mcp.tool()
-def finance_delete_scheduled_transaction(id: int) -> dict:
+def finance_delete_scheduled_transaction(id: int, db: Database = Depends(get_user_db)) -> dict:
     """Hapus scheduled transaction sepenuhnya."""
-    return scheduled.delete_scheduled_transaction(id)
+    return scheduled.delete_scheduled_transaction(db, id)
 
 
 # ---------------------------------------------------------------------------
@@ -287,49 +304,48 @@ def finance_delete_scheduled_transaction(id: int) -> dict:
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-def finance_get_onboarding_status() -> dict:
+def finance_get_onboarding_status(db: Database = Depends(get_user_db)) -> dict:
     """
     Cek status onboarding: rekening, targets, envelope assignment, RTA.
     Panggil ini di awal setiap sesi baru.
     """
-    return analytics.get_onboarding_status()
+    return analytics.get_onboarding_status(db)
 
 
 @mcp.tool()
-def finance_get_ready_to_assign(period: str | None = None) -> dict:
+def finance_get_ready_to_assign(period: str | None = None, db: Database = Depends(get_user_db)) -> dict:
     """
     Hitung Ready to Assign = total saldo rekening − total available semua envelope.
     Target: nol. Setiap rupiah harus punya tugas.
     """
-    return analytics.get_ready_to_assign(period)
+    return analytics.get_ready_to_assign(db, period)
 
 
 @mcp.tool()
-def finance_get_age_of_money() -> dict:
+def finance_get_age_of_money(db: Database = Depends(get_user_db)) -> dict:
     """
     Hitung Age of Money: rata-rata berapa hari uang duduk sebelum dipakai.
     Dihitung FIFO. Target: 30+ hari.
     """
-    return analytics.get_age_of_money()
+    return analytics.get_age_of_money(db)
 
 
 @mcp.tool()
-def finance_get_summary(period: str | None = None) -> dict:
+def finance_get_summary(period: str | None = None, db: Database = Depends(get_user_db)) -> dict:
     """Ringkasan bulanan: income, expense, net, breakdown per envelope. period: YYYY-MM."""
-    return analytics.get_summary(period)
+    return analytics.get_summary(db, period)
 
 
 @mcp.tool()
-def finance_get_spending_trend(envelope_id: int | None = None, months: int = 3) -> list:
+def finance_get_spending_trend(envelope_id: int | None = None, months: int = 3, db: Database = Depends(get_user_db)) -> list:
     """Tren pengeluaran per envelope, N bulan ke belakang."""
-    return analytics.get_spending_trend(envelope_id, months)
-
+    return analytics.get_spending_trend(db, envelope_id, months)
 
 
 # ---------------------------------------------------------------------------
 
 def main():
-    mcp.run()
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":

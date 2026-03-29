@@ -1,5 +1,5 @@
 from datetime import date
-from rejeki.database import execute, fetchall, fetchone
+from rejeki.database import Database
 
 
 # ---------------------------------------------------------------------------
@@ -17,29 +17,23 @@ def _prev_period(period: str) -> str:
     return f"{year}-{month - 1:02d}"
 
 
-def _activity(envelope_id: int, period: str) -> float:
-    """Total spending from transactions for this envelope in this period."""
-    return fetchone(
+def _activity(db: Database, envelope_id: int, period: str) -> float:
+    return db.fetchone(
         """SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
            WHERE envelope_id = ? AND type = 'expense' AND strftime('%Y-%m', date) = ?""",
         (envelope_id, period),
     )["total"]
 
 
-def _compute_carryover(envelope_id: int, period: str) -> float:
-    """
-    Carryover from the previous period — positive only.
-    Envelope rule: overspend does NOT carry forward into the envelope.
-    It reduces RTA next month instead.
-    """
+def _compute_carryover(db: Database, envelope_id: int, period: str) -> float:
     prev = _prev_period(period)
-    row = fetchone(
+    row = db.fetchone(
         "SELECT assigned, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
         (envelope_id, prev),
     )
     if not row:
         return 0.0
-    prev_available = row["carryover"] + row["assigned"] - _activity(envelope_id, prev)
+    prev_available = row["carryover"] + row["assigned"] - _activity(db, envelope_id, prev)
     return max(0.0, prev_available)
 
 
@@ -47,12 +41,12 @@ def _compute_carryover(envelope_id: int, period: str) -> float:
 # Groups
 # ---------------------------------------------------------------------------
 
-def get_groups() -> list:
-    return fetchall("SELECT id, name, sort_order FROM envelope_groups ORDER BY sort_order")
+def get_groups(db: Database) -> list:
+    return db.fetchall("SELECT id, name, sort_order FROM envelope_groups ORDER BY sort_order")
 
 
-def add_group(name: str, sort_order: int = 0) -> dict:
-    id = execute(
+def add_group(db: Database, name: str, sort_order: int = 0) -> dict:
+    id = db.execute(
         "INSERT INTO envelope_groups (name, sort_order) VALUES (?, ?)",
         (name, sort_order),
     )
@@ -63,18 +57,18 @@ def add_group(name: str, sort_order: int = 0) -> dict:
 # Envelope CRUD
 # ---------------------------------------------------------------------------
 
-def add_envelope(name: str, type: str, icon: str | None = None, group_id: int | None = None) -> dict:
+def add_envelope(db: Database, name: str, type: str, icon: str | None = None, group_id: int | None = None) -> dict:
     if type not in ("income", "expense"):
         raise ValueError("type harus 'income' atau 'expense'")
-    id = execute(
+    id = db.execute(
         "INSERT INTO envelopes (name, icon, type, group_id) VALUES (?, ?, ?, ?)",
         (name, icon, type, group_id),
     )
     return {"id": id, "name": name, "icon": icon, "type": type, "group_id": group_id}
 
 
-def edit_envelope(id: int, name: str | None = None, icon: str | None = None, group_id: int | None = None) -> dict:
-    env = fetchone("SELECT * FROM envelopes WHERE id = ?", (id,))
+def edit_envelope(db: Database, id: int, name: str | None = None, icon: str | None = None, group_id: int | None = None) -> dict:
+    env = db.fetchone("SELECT * FROM envelopes WHERE id = ?", (id,))
     if not env:
         raise ValueError(f"Envelope id={id} tidak ditemukan")
 
@@ -82,41 +76,37 @@ def edit_envelope(id: int, name: str | None = None, icon: str | None = None, gro
     new_icon = icon if icon is not None else env["icon"]
     new_group_id = group_id if group_id is not None else env["group_id"]
 
-    execute(
+    db.execute(
         "UPDATE envelopes SET name = ?, icon = ?, group_id = ? WHERE id = ?",
         (new_name, new_icon, new_group_id, id),
     )
     return {"id": id, "name": new_name, "icon": new_icon, "type": env["type"], "group_id": new_group_id}
 
 
-def delete_envelope(id: int) -> dict:
-    env = fetchone("SELECT * FROM envelopes WHERE id = ?", (id,))
+def delete_envelope(db: Database, id: int) -> dict:
+    env = db.fetchone("SELECT * FROM envelopes WHERE id = ?", (id,))
     if not env:
         raise ValueError(f"Envelope id={id} tidak ditemukan")
 
-    execute("DELETE FROM budget_periods WHERE envelope_id = ?", (id,))
-    execute("DELETE FROM envelopes WHERE id = ?", (id,))
+    db.execute("DELETE FROM budget_periods WHERE envelope_id = ?", (id,))
+    db.execute("DELETE FROM envelopes WHERE id = ?", (id,))
     return {"deleted_id": id, "name": env["name"]}
 
 
 def set_target(
+    db: Database,
     envelope_id: int,
     target_type: str,
     target_amount: float | None = None,
     target_deadline: str | None = None,
 ) -> dict:
-    """
-    Set a funding target on an expense envelope.
-    target_type: 'monthly' — assign X per month.
-                 'goal'    — accumulate X by deadline.
-    """
-    env = fetchone("SELECT * FROM envelopes WHERE id = ?", (envelope_id,))
+    env = db.fetchone("SELECT * FROM envelopes WHERE id = ?", (envelope_id,))
     if not env:
         raise ValueError(f"Envelope id={envelope_id} tidak ditemukan")
     if env["type"] != "expense":
         raise ValueError("Hanya envelope expense yang bisa punya target")
 
-    execute(
+    db.execute(
         "UPDATE envelopes SET target_type = ?, target_amount = ?, target_deadline = ? WHERE id = ?",
         (target_type, target_amount, target_deadline, envelope_id),
     )
@@ -133,34 +123,30 @@ def set_target(
 # Budget operations
 # ---------------------------------------------------------------------------
 
-def assign_to_envelope(envelope_id: int, amount: float, period: str | None = None) -> dict:
-    """
-    Assign money from Ready to Assign into an envelope.
-    Creates or overwrites the assigned amount for this period.
-    """
+def assign_to_envelope(db: Database, envelope_id: int, amount: float, period: str | None = None) -> dict:
     period = period or _current_period()
 
-    env = fetchone("SELECT * FROM envelopes WHERE id = ?", (envelope_id,))
+    env = db.fetchone("SELECT * FROM envelopes WHERE id = ?", (envelope_id,))
     if not env:
         raise ValueError(f"Envelope id={envelope_id} tidak ditemukan")
     if env["type"] != "expense":
         raise ValueError("Hanya envelope expense yang bisa di-assign")
 
-    existing = fetchone(
+    existing = db.fetchone(
         "SELECT id, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
         (envelope_id, period),
     )
     if existing:
-        execute("UPDATE budget_periods SET assigned = ? WHERE id = ?", (amount, existing["id"]))
+        db.execute("UPDATE budget_periods SET assigned = ? WHERE id = ?", (amount, existing["id"]))
         carryover = existing["carryover"]
     else:
-        carryover = _compute_carryover(envelope_id, period)
-        execute(
+        carryover = _compute_carryover(db, envelope_id, period)
+        db.execute(
             "INSERT INTO budget_periods (envelope_id, period, assigned, carryover) VALUES (?, ?, ?, ?)",
             (envelope_id, period, amount, carryover),
         )
 
-    act = _activity(envelope_id, period)
+    act = _activity(db, envelope_id, period)
     return {
         "envelope": env["name"],
         "icon": env["icon"],
@@ -172,53 +158,49 @@ def assign_to_envelope(envelope_id: int, amount: float, period: str | None = Non
     }
 
 
-def move_money(from_id: int, to_id: int, amount: float, period: str | None = None) -> dict:
-    """
-    Move money between envelopes within the same period.
-    Used to cover overspend or rebalance budgets.
-    """
+def move_money(db: Database, from_id: int, to_id: int, amount: float, period: str | None = None) -> dict:
     period = period or _current_period()
 
-    from_env = fetchone("SELECT * FROM envelopes WHERE id = ?", (from_id,))
-    to_env = fetchone("SELECT * FROM envelopes WHERE id = ?", (to_id,))
+    from_env = db.fetchone("SELECT * FROM envelopes WHERE id = ?", (from_id,))
+    to_env = db.fetchone("SELECT * FROM envelopes WHERE id = ?", (to_id,))
     if not from_env or not to_env:
         raise ValueError("Envelope tidak ditemukan")
 
-    from_bp = fetchone(
+    from_bp = db.fetchone(
         "SELECT id, assigned, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
         (from_id, period),
     )
-    to_bp = fetchone(
+    to_bp = db.fetchone(
         "SELECT id, assigned, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
         (to_id, period),
     )
 
     from_assigned = from_bp["assigned"] if from_bp else 0.0
     to_assigned = to_bp["assigned"] if to_bp else 0.0
-    from_carryover = from_bp["carryover"] if from_bp else _compute_carryover(from_id, period)
-    to_carryover = to_bp["carryover"] if to_bp else _compute_carryover(to_id, period)
+    from_carryover = from_bp["carryover"] if from_bp else _compute_carryover(db, from_id, period)
+    to_carryover = to_bp["carryover"] if to_bp else _compute_carryover(db, to_id, period)
 
     new_from = from_assigned - amount
     new_to = to_assigned + amount
 
     if from_bp:
-        execute("UPDATE budget_periods SET assigned = ? WHERE id = ?", (new_from, from_bp["id"]))
+        db.execute("UPDATE budget_periods SET assigned = ? WHERE id = ?", (new_from, from_bp["id"]))
     else:
-        execute(
+        db.execute(
             "INSERT INTO budget_periods (envelope_id, period, assigned, carryover) VALUES (?, ?, ?, ?)",
             (from_id, period, new_from, from_carryover),
         )
 
     if to_bp:
-        execute("UPDATE budget_periods SET assigned = ? WHERE id = ?", (new_to, to_bp["id"]))
+        db.execute("UPDATE budget_periods SET assigned = ? WHERE id = ?", (new_to, to_bp["id"]))
     else:
-        execute(
+        db.execute(
             "INSERT INTO budget_periods (envelope_id, period, assigned, carryover) VALUES (?, ?, ?, ?)",
             (to_id, period, new_to, to_carryover),
         )
 
-    from_act = _activity(from_id, period)
-    to_act = _activity(to_id, period)
+    from_act = _activity(db, from_id, period)
+    to_act = _activity(db, to_id, period)
 
     return {
         "moved": amount,
@@ -238,19 +220,14 @@ def move_money(from_id: int, to_id: int, amount: float, period: str | None = Non
     }
 
 
-def get_envelopes(period: str | None = None) -> dict:
-    """
-    Full budget view for the given period.
-    Returns income sources + expense envelopes grouped by envelope_group.
-    Each expense envelope shows: carryover, assigned, activity, available, target status.
-    """
+def get_envelopes(db: Database, period: str | None = None) -> dict:
     period = period or _current_period()
 
-    income_sources = fetchall(
+    income_sources = db.fetchall(
         "SELECT id, name, icon FROM envelopes WHERE type = 'income' ORDER BY id"
     )
 
-    expense_envelopes = fetchall(
+    expense_envelopes = db.fetchall(
         """SELECT e.id, e.name, e.icon, e.target_type, e.target_amount, e.target_deadline,
                   g.name AS group_name, g.id AS group_id
            FROM envelopes e
@@ -264,13 +241,13 @@ def get_envelopes(period: str | None = None) -> dict:
     total_available = 0.0
 
     for env in expense_envelopes:
-        bp = fetchone(
+        bp = db.fetchone(
             "SELECT assigned, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
             (env["id"], period),
         )
-        carryover = bp["carryover"] if bp else _compute_carryover(env["id"], period)
+        carryover = bp["carryover"] if bp else _compute_carryover(db, env["id"], period)
         assigned = bp["assigned"] if bp else 0.0
-        act = _activity(env["id"], period)
+        act = _activity(db, env["id"], period)
         available = carryover + assigned - act
 
         group_name = env["group_name"] or "Lainnya"

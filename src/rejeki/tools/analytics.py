@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from rejeki.database import fetchone, fetchall
+from rejeki.database import Database
 
 
 def _current_period() -> str:
@@ -13,17 +13,16 @@ def _prev_period(period: str) -> str:
     return f"{year}-{month - 1:02d}"
 
 
-def _activity(envelope_id: int, period: str) -> float:
-    return fetchone(
+def _activity(db: Database, envelope_id: int, period: str) -> float:
+    return db.fetchone(
         """SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
            WHERE envelope_id = ? AND type = 'expense' AND strftime('%Y-%m', date) = ?""",
         (envelope_id, period),
     )["total"]
 
 
-def _envelope_available(envelope_id: int, period: str) -> float:
-    """Compute available balance for an envelope in a period, including carryover."""
-    bp = fetchone(
+def _envelope_available(db: Database, envelope_id: int, period: str) -> float:
+    bp = db.fetchone(
         "SELECT assigned, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
         (envelope_id, period),
     )
@@ -32,35 +31,30 @@ def _envelope_available(envelope_id: int, period: str) -> float:
         assigned = bp["assigned"]
     else:
         prev = _prev_period(period)
-        prev_bp = fetchone(
+        prev_bp = db.fetchone(
             "SELECT assigned, carryover FROM budget_periods WHERE envelope_id = ? AND period = ?",
             (envelope_id, prev),
         )
         if prev_bp:
-            prev_act = _activity(envelope_id, prev)
+            prev_act = _activity(db, envelope_id, prev)
             carryover = max(0.0, prev_bp["carryover"] + prev_bp["assigned"] - prev_act)
         else:
             carryover = 0.0
         assigned = 0.0
 
-    return carryover + assigned - _activity(envelope_id, period)
+    return carryover + assigned - _activity(db, envelope_id, period)
 
 
 # ---------------------------------------------------------------------------
 # Public tools
 # ---------------------------------------------------------------------------
 
-def get_ready_to_assign(period: str | None = None) -> dict:
-    """
-    Ready to Assign = total account balance − Σ available across all expense envelopes.
-    Goal: bring to zero. Every rupiah must have a job.
-    Positive = unassigned money floating. Negative = overspent.
-    """
+def get_ready_to_assign(db: Database, period: str | None = None) -> dict:
     period = period or _current_period()
 
-    total_balance = fetchone("SELECT COALESCE(SUM(balance), 0) AS total FROM accounts")["total"]
-    envelopes = fetchall("SELECT id FROM envelopes WHERE type = 'expense'")
-    total_available = sum(_envelope_available(e["id"], period) for e in envelopes)
+    total_balance = db.fetchone("SELECT COALESCE(SUM(balance), 0) AS total FROM accounts")["total"]
+    envelopes = db.fetchall("SELECT id FROM envelopes WHERE type = 'expense'")
+    total_available = sum(_envelope_available(db, e["id"], period) for e in envelopes)
 
     rta = total_balance - total_available
     return {
@@ -73,16 +67,11 @@ def get_ready_to_assign(period: str | None = None) -> dict:
     }
 
 
-def get_age_of_money() -> dict:
-    """
-    Average days money sits in accounts before being spent.
-    Calculated FIFO: income dollars are matched to expense dollars chronologically.
-    Target: 30+ days means you're not living paycheck-to-paycheck.
-    """
-    incomes = fetchall(
+def get_age_of_money(db: Database) -> dict:
+    incomes = db.fetchall(
         "SELECT date, amount FROM transactions WHERE type = 'income' ORDER BY date ASC, id ASC"
     )
-    expenses = fetchall(
+    expenses = db.fetchall(
         "SELECT date, amount FROM transactions WHERE type = 'expense' ORDER BY date ASC, id ASC"
     )
 
@@ -140,21 +129,20 @@ def get_age_of_money() -> dict:
     }
 
 
-def get_summary(period: str | None = None) -> dict:
-    """Monthly income/expense summary with breakdown by envelope."""
+def get_summary(db: Database, period: str | None = None) -> dict:
     period = period or _current_period()
 
-    income = fetchone(
+    income = db.fetchone(
         "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'income' AND strftime('%Y-%m', date) = ?",
         (period,),
     )["total"]
 
-    expense = fetchone(
+    expense = db.fetchone(
         "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'expense' AND strftime('%Y-%m', date) = ?",
         (period,),
     )["total"]
 
-    by_envelope = fetchall(
+    by_envelope = db.fetchall(
         """SELECT e.name AS envelope, e.icon, COALESCE(SUM(t.amount), 0) AS total
            FROM transactions t
            JOIN envelopes e ON t.envelope_id = e.id
@@ -172,9 +160,8 @@ def get_summary(period: str | None = None) -> dict:
     }
 
 
-def get_spending_trend(envelope_id: int | None = None, months: int = 3) -> list[dict]:
-    """Spending per envelope over the past N months."""
-    return fetchall(
+def get_spending_trend(db: Database, envelope_id: int | None = None, months: int = 3) -> list[dict]:
+    return db.fetchall(
         """SELECT strftime('%Y-%m', t.date) AS period,
                   e.name AS envelope, e.icon,
                   COALESCE(SUM(t.amount), 0) AS total
@@ -189,25 +176,21 @@ def get_spending_trend(envelope_id: int | None = None, months: int = 3) -> list[
     )
 
 
-def get_onboarding_status() -> dict:
-    """
-    Check how far along the initial setup is.
-    Call this at the start of a session to decide whether to guide the user.
-    """
-    accounts = fetchall("SELECT id, name, balance FROM accounts")
+def get_onboarding_status(db: Database) -> dict:
+    accounts = db.fetchall("SELECT id, name, balance FROM accounts")
     has_accounts = len(accounts) > 0
     has_balance = any(a["balance"] > 0 for a in accounts)
     total_balance = sum(a["balance"] for a in accounts)
 
-    has_targets = fetchone(
+    has_targets = db.fetchone(
         "SELECT COUNT(*) AS n FROM envelopes WHERE type='expense' AND target_type IS NOT NULL"
     )["n"] > 0
 
-    any_assigned = fetchone("SELECT COUNT(*) AS n FROM budget_periods")["n"] > 0
+    any_assigned = db.fetchone("SELECT COUNT(*) AS n FROM budget_periods")["n"] > 0
 
     period = _current_period()
-    envelopes = fetchall("SELECT id FROM envelopes WHERE type = 'expense'")
-    total_available = sum(_envelope_available(e["id"], period) for e in envelopes)
+    envelopes = db.fetchall("SELECT id FROM envelopes WHERE type = 'expense'")
+    total_available = sum(_envelope_available(db, e["id"], period) for e in envelopes)
     rta = total_balance - total_available
     all_assigned = has_balance and abs(rta) < 1
 

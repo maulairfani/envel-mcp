@@ -1,8 +1,9 @@
 from datetime import date
-from rejeki.database import execute, fetchall, fetchone
+from rejeki.database import Database
 
 
 def add_transaction(
+    db: Database,
     amount: float,
     type: str,
     account_id: int,
@@ -14,7 +15,7 @@ def add_transaction(
 ) -> dict:
     txn_date = transaction_date or date.today().isoformat()
 
-    txn_id = execute(
+    txn_id = db.execute(
         """INSERT INTO transactions
            (amount, type, envelope_id, account_id, to_account_id, payee, memo, date)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -22,14 +23,14 @@ def add_transaction(
     )
 
     if type == "expense":
-        execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
+        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
     elif type == "income":
-        execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, account_id))
+        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, account_id))
     elif type == "transfer":
-        execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
-        execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, to_account_id))
+        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
+        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, to_account_id))
 
-    account = fetchone("SELECT name, balance FROM accounts WHERE id = ?", (account_id,))
+    account = db.fetchone("SELECT name, balance FROM accounts WHERE id = ?", (account_id,))
     return {
         "id": txn_id,
         "amount": amount,
@@ -42,28 +43,29 @@ def add_transaction(
     }
 
 
-def _reverse_balance(txn: dict) -> None:
+def _reverse_balance(db: Database, txn: dict) -> None:
     t = txn["type"]
     if t == "expense":
-        execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (txn["amount"], txn["account_id"]))
+        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (txn["amount"], txn["account_id"]))
     elif t == "income":
-        execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (txn["amount"], txn["account_id"]))
+        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (txn["amount"], txn["account_id"]))
     elif t == "transfer":
-        execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (txn["amount"], txn["account_id"]))
-        execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (txn["amount"], txn["to_account_id"]))
+        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (txn["amount"], txn["account_id"]))
+        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (txn["amount"], txn["to_account_id"]))
 
 
-def _apply_balance(amount: float, type: str, account_id: int, to_account_id: int | None) -> None:
+def _apply_balance(db: Database, amount: float, type: str, account_id: int, to_account_id: int | None) -> None:
     if type == "expense":
-        execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
+        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
     elif type == "income":
-        execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, account_id))
+        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, account_id))
     elif type == "transfer":
-        execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
-        execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, to_account_id))
+        db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, account_id))
+        db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, to_account_id))
 
 
 def edit_transaction(
+    db: Database,
     id: int,
     amount: float | None = None,
     type: str | None = None,
@@ -74,11 +76,11 @@ def edit_transaction(
     memo: str | None = None,
     transaction_date: str | None = None,
 ) -> dict:
-    old = fetchone("SELECT * FROM transactions WHERE id = ?", (id,))
+    old = db.fetchone("SELECT * FROM transactions WHERE id = ?", (id,))
     if not old:
         raise ValueError(f"Transaksi id={id} tidak ditemukan")
 
-    _reverse_balance(old)
+    _reverse_balance(db, old)
 
     new_amount = amount if amount is not None else old["amount"]
     new_type = type or old["type"]
@@ -89,15 +91,15 @@ def edit_transaction(
     new_memo = memo if memo is not None else old["memo"]
     new_date = transaction_date or old["date"]
 
-    execute(
+    db.execute(
         """UPDATE transactions SET amount=?, type=?, account_id=?, to_account_id=?,
            envelope_id=?, payee=?, memo=?, date=? WHERE id=?""",
         (new_amount, new_type, new_account_id, new_to_account_id, new_envelope_id,
          new_payee, new_memo, new_date, id),
     )
-    _apply_balance(new_amount, new_type, new_account_id, new_to_account_id)
+    _apply_balance(db, new_amount, new_type, new_account_id, new_to_account_id)
 
-    account = fetchone("SELECT name, balance FROM accounts WHERE id = ?", (new_account_id,))
+    account = db.fetchone("SELECT name, balance FROM accounts WHERE id = ?", (new_account_id,))
     return {
         "id": id,
         "amount": new_amount,
@@ -110,15 +112,15 @@ def edit_transaction(
     }
 
 
-def delete_transaction(id: int) -> dict:
-    txn = fetchone("SELECT * FROM transactions WHERE id = ?", (id,))
+def delete_transaction(db: Database, id: int) -> dict:
+    txn = db.fetchone("SELECT * FROM transactions WHERE id = ?", (id,))
     if not txn:
         raise ValueError(f"Transaksi id={id} tidak ditemukan")
 
-    _reverse_balance(txn)
-    execute("DELETE FROM transactions WHERE id = ?", (id,))
+    _reverse_balance(db, txn)
+    db.execute("DELETE FROM transactions WHERE id = ?", (id,))
 
-    account = fetchone("SELECT name, balance FROM accounts WHERE id = ?", (txn["account_id"],))
+    account = db.fetchone("SELECT name, balance FROM accounts WHERE id = ?", (txn["account_id"],))
     return {
         "deleted_id": id,
         "account": account["name"],
@@ -127,6 +129,7 @@ def delete_transaction(id: int) -> dict:
 
 
 def get_transactions(
+    db: Database,
     account_id: int | None = None,
     envelope_id: int | None = None,
     type: str | None = None,
@@ -160,7 +163,7 @@ def get_transactions(
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     params.append(limit)
 
-    return fetchall(
+    return db.fetchall(
         f"""SELECT t.id, t.amount, t.type, t.payee, t.memo, t.date,
                    a.name AS account, e.name AS envelope, e.icon AS envelope_icon
             FROM transactions t

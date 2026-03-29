@@ -1,6 +1,6 @@
 import calendar
 from datetime import date, timedelta
-from rejeki.database import execute, fetchall, fetchone
+from rejeki.database import Database
 from rejeki.tools.transactions import add_transaction
 
 
@@ -22,6 +22,7 @@ def _next_date(date_str: str, recurrence: str) -> str:
 
 
 def add_scheduled_transaction(
+    db: Database,
     amount: float,
     type: str,
     account_id: int,
@@ -32,7 +33,7 @@ def add_scheduled_transaction(
     memo: str | None = None,
     recurrence: str = "once",
 ) -> dict:
-    id = execute(
+    id = db.execute(
         """INSERT INTO scheduled_transactions
            (amount, type, envelope_id, account_id, to_account_id, payee, memo, scheduled_date, recurrence)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -48,10 +49,10 @@ def add_scheduled_transaction(
     }
 
 
-def get_scheduled_transactions(include_inactive: bool = False) -> list[dict]:
+def get_scheduled_transactions(db: Database, include_inactive: bool = False) -> list[dict]:
     today = date.today()
     where = "" if include_inactive else "WHERE s.is_active = 1"
-    rows = fetchall(
+    rows = db.fetchall(
         f"""SELECT s.id, s.amount, s.type, s.payee, s.memo, s.scheduled_date,
                    s.recurrence, s.is_active,
                    e.name AS envelope, e.icon AS envelope_icon,
@@ -68,16 +69,13 @@ def get_scheduled_transactions(include_inactive: bool = False) -> list[dict]:
     return rows
 
 
-def approve_scheduled_transaction(id: int) -> dict:
-    """
-    Execute as a real transaction.
-    If recurring, automatically advance to the next occurrence date.
-    """
-    sched = fetchone("SELECT * FROM scheduled_transactions WHERE id = ? AND is_active = 1", (id,))
+def approve_scheduled_transaction(db: Database, id: int) -> dict:
+    sched = db.fetchone("SELECT * FROM scheduled_transactions WHERE id = ? AND is_active = 1", (id,))
     if not sched:
         raise ValueError(f"Scheduled transaction id={id} tidak ditemukan atau sudah tidak aktif")
 
     txn = add_transaction(
+        db,
         amount=sched["amount"],
         type=sched["type"],
         account_id=sched["account_id"],
@@ -89,36 +87,32 @@ def approve_scheduled_transaction(id: int) -> dict:
     )
 
     if sched["recurrence"] == "once":
-        execute("UPDATE scheduled_transactions SET is_active = 0 WHERE id = ?", (id,))
+        db.execute("UPDATE scheduled_transactions SET is_active = 0 WHERE id = ?", (id,))
         next_date = None
     else:
         next_date = _next_date(sched["scheduled_date"], sched["recurrence"])
-        execute("UPDATE scheduled_transactions SET scheduled_date = ? WHERE id = ?", (next_date, id))
+        db.execute("UPDATE scheduled_transactions SET scheduled_date = ? WHERE id = ?", (next_date, id))
 
     return {"transaction": txn, "next_scheduled": next_date}
 
 
-def skip_scheduled_transaction(id: int) -> dict:
-    """
-    Skip this occurrence without recording a transaction.
-    If recurring, advance to the next occurrence date.
-    """
-    sched = fetchone("SELECT * FROM scheduled_transactions WHERE id = ? AND is_active = 1", (id,))
+def skip_scheduled_transaction(db: Database, id: int) -> dict:
+    sched = db.fetchone("SELECT * FROM scheduled_transactions WHERE id = ? AND is_active = 1", (id,))
     if not sched:
         raise ValueError(f"Scheduled transaction id={id} tidak ditemukan atau sudah tidak aktif")
 
     if sched["recurrence"] == "once":
-        execute("UPDATE scheduled_transactions SET is_active = 0 WHERE id = ?", (id,))
+        db.execute("UPDATE scheduled_transactions SET is_active = 0 WHERE id = ?", (id,))
         return {"id": id, "status": "skipped_and_cancelled"}
 
     next_date = _next_date(sched["scheduled_date"], sched["recurrence"])
-    execute("UPDATE scheduled_transactions SET scheduled_date = ? WHERE id = ?", (next_date, id))
+    db.execute("UPDATE scheduled_transactions SET scheduled_date = ? WHERE id = ?", (next_date, id))
     return {"id": id, "status": "skipped", "next_scheduled": next_date}
 
 
-def delete_scheduled_transaction(id: int) -> dict:
-    sched = fetchone("SELECT * FROM scheduled_transactions WHERE id = ?", (id,))
+def delete_scheduled_transaction(db: Database, id: int) -> dict:
+    sched = db.fetchone("SELECT * FROM scheduled_transactions WHERE id = ?", (id,))
     if not sched:
         raise ValueError(f"Scheduled transaction id={id} tidak ditemukan")
-    execute("DELETE FROM scheduled_transactions WHERE id = ?", (id,))
+    db.execute("DELETE FROM scheduled_transactions WHERE id = ?", (id,))
     return {"deleted_id": id, "payee": sched["payee"]}
