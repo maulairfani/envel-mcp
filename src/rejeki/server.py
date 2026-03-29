@@ -1,6 +1,6 @@
 from fastmcp import FastMCP
 from rejeki.database import init_db
-from rejeki.tools import accounts, envelopes, transactions, scheduled, analytics, assets
+from rejeki.tools import accounts, envelopes, transactions, scheduled, analytics
 
 init_db()
 mcp = FastMCP("rejeki")
@@ -305,27 +305,6 @@ def finance_get_spending_trend(envelope_id: int | None = None, months: int = 3) 
     """Tren pengeluaran per envelope, N bulan ke belakang."""
     return analytics.get_spending_trend(envelope_id, months)
 
-
-# ---------------------------------------------------------------------------
-# Assets
-# ---------------------------------------------------------------------------
-
-@mcp.tool()
-def finance_add_asset(
-    name: str,
-    type: str,
-    cost_basis: float,
-    quantity: float,
-    date_acquired: str | None = None,
-) -> dict:
-    """Catat aset investasi (saham, reksa dana, crypto, dll) berdasarkan cost basis."""
-    return assets.add_asset(name, type, cost_basis, quantity, date_acquired)
-
-
-@mcp.tool()
-def finance_get_assets() -> dict:
-    """List semua aset dan total cost basis."""
-    return assets.get_assets()
 
 
 # ---------------------------------------------------------------------------

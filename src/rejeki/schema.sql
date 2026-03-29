@@ -7,7 +7,6 @@
 --   transactions    = all recorded money movements
 --   scheduled_transactions = future/recurring transactions
 --   accounts        = bank accounts, e-wallets, cash
---   assets          = investment assets tracked by cost basis
 
 CREATE TABLE IF NOT EXISTS accounts (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,15 +70,6 @@ CREATE TABLE IF NOT EXISTS scheduled_transactions (
     recurrence     TEXT NOT NULL DEFAULT 'once' CHECK (recurrence IN ('once', 'weekly', 'monthly', 'yearly')),
     is_active      INTEGER NOT NULL DEFAULT 1,
     created_at     TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS assets (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    name          TEXT NOT NULL,
-    type          TEXT NOT NULL,
-    cost_basis    REAL NOT NULL,
-    quantity      REAL NOT NULL,
-    date_acquired TEXT NOT NULL DEFAULT (date('now'))
 );
 
 -- Default envelope groups
