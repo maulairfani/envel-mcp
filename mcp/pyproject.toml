@@ -2,14 +2,15 @@
 name = "rejeki"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["fastmcp", "libsql"]
+dependencies = ["fastmcp", "psycopg2-binary", "asyncpg", "alembic", "sqlalchemy"]
 
 [project.scripts]
 rejeki = "rejeki.server:main"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rejeki*"]
+
 [build-system]
 requires = ["setuptools>=42"]
 build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["src"]

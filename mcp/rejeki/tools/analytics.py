@@ -16,7 +16,7 @@ def _prev_period(period: str) -> str:
 def _activity(envelope_id: int, period: str) -> float:
     return fetchone(
         """SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-           WHERE envelope_id = ? AND type = 'expense' AND strftime('%Y-%m', date) = ?""",
+           WHERE envelope_id = ? AND type = 'expense' AND TO_CHAR(date, 'YYYY-MM') = ?""",
         (envelope_id, period),
     )["total"]
 
@@ -145,12 +145,12 @@ def get_summary(period: str | None = None) -> dict:
     period = period or _current_period()
 
     income = fetchone(
-        "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'income' AND strftime('%Y-%m', date) = ?",
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'income' AND TO_CHAR(date, 'YYYY-MM') = ?",
         (period,),
     )["total"]
 
     expense = fetchone(
-        "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'expense' AND strftime('%Y-%m', date) = ?",
+        "SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'expense' AND TO_CHAR(date, 'YYYY-MM') = ?",
         (period,),
     )["total"]
 
@@ -158,8 +158,8 @@ def get_summary(period: str | None = None) -> dict:
         """SELECT e.name AS envelope, e.icon, COALESCE(SUM(t.amount), 0) AS total
            FROM transactions t
            JOIN envelopes e ON t.envelope_id = e.id
-           WHERE t.type = 'expense' AND strftime('%Y-%m', t.date) = ?
-           GROUP BY e.id ORDER BY total DESC""",
+           WHERE t.type = 'expense' AND TO_CHAR(t.date, 'YYYY-MM') = ?
+           GROUP BY e.id, e.name, e.icon ORDER BY total DESC""",
         (period,),
     )
 
@@ -175,15 +175,15 @@ def get_summary(period: str | None = None) -> dict:
 def get_spending_trend(envelope_id: int | None = None, months: int = 3) -> list[dict]:
     """Spending per envelope over the past N months."""
     return fetchall(
-        """SELECT strftime('%Y-%m', t.date) AS period,
+        """SELECT TO_CHAR(t.date, 'YYYY-MM') AS period,
                   e.name AS envelope, e.icon,
                   COALESCE(SUM(t.amount), 0) AS total
            FROM transactions t
            JOIN envelopes e ON t.envelope_id = e.id
            WHERE t.type = 'expense'
              AND (? IS NULL OR t.envelope_id = ?)
-             AND t.date >= date('now', ? || ' months')
-           GROUP BY period, t.envelope_id
+             AND t.date >= (CURRENT_DATE + (? || ' months')::INTERVAL)
+           GROUP BY TO_CHAR(t.date, 'YYYY-MM'), t.envelope_id, e.name, e.icon
            ORDER BY period DESC, total DESC""",
         (envelope_id, envelope_id, f"-{months}"),
     )

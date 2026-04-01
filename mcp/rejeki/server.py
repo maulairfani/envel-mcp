@@ -1,9 +1,39 @@
+import os
+
 from fastmcp import FastMCP
-from rejeki.database import init_db
+from fastmcp.server.auth.providers.github import GitHubProvider
+from fastmcp.server.dependencies import get_access_token
+from rejeki.kv_store import PgKeyValue
 from rejeki.tools import accounts, envelopes, transactions, scheduled, analytics, quick_add as _quick_add
 
-init_db()
-mcp = FastMCP("rejeki")
+_client_storage = PgKeyValue(os.environ["DATABASE_URL"])
+
+_auth = GitHubProvider(
+    client_id=os.environ["GITHUB_CLIENT_ID"],
+    client_secret=os.environ["GITHUB_CLIENT_SECRET"],
+    base_url=os.environ["MCP_BASE_URL"],
+    client_storage=_client_storage,
+    jwt_signing_key=os.environ["JWT_SECRET"],
+)
+
+mcp = FastMCP("rejeki", auth=_auth)
+
+
+# ---------------------------------------------------------------------------
+# Auth check
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def finance_whoami() -> dict:
+    """Cek status autentikasi. Kembalikan info user yang sedang login."""
+    token = get_access_token()
+    if token is None:
+        return {"authenticated": False}
+    return {
+        "authenticated": True,
+        "github_login": token.claims.get("login"),
+        "github_user_id": token.claims.get("sub"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +359,11 @@ def finance_get_spending_trend(envelope_id: int | None = None, months: int = 3) 
 # ---------------------------------------------------------------------------
 
 def main():
-    mcp.run()
+    transport = os.getenv("MCP_TRANSPORT", "streamable-http")
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
 
 
 if __name__ == "__main__":

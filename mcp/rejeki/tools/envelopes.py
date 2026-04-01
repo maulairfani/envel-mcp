@@ -21,7 +21,7 @@ def _activity(envelope_id: int, period: str) -> float:
     """Total spending from transactions for this envelope in this period."""
     return fetchone(
         """SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
-           WHERE envelope_id = ? AND type = 'expense' AND strftime('%Y-%m', date) = ?""",
+           WHERE envelope_id = ? AND type = 'expense' AND TO_CHAR(date, 'YYYY-MM') = ?""",
         (envelope_id, period),
     )["total"]
 
