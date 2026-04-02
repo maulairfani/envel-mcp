@@ -1,8 +1,10 @@
+import os
+
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp.server.auth.providers.workos import AuthKitProvider
 
-from rejeki.auth import AuthMiddleware
 from rejeki.database import Database
 from rejeki.deps import get_user_db
 from rejeki.platform_db import init_platform_db
@@ -12,8 +14,12 @@ from rejeki.tools import quick_add as _quick_add
 load_dotenv()
 init_platform_db()
 
-mcp = FastMCP("rejeki")
-mcp.add_middleware(AuthMiddleware())
+auth = AuthKitProvider(
+    authkit_domain=os.environ["AUTHKIT_DOMAIN"],
+    base_url=os.environ.get("BASE_URL", "http://localhost:8000"),
+)
+
+mcp = FastMCP("rejeki", auth=auth)
 
 
 # ---------------------------------------------------------------------------

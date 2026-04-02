@@ -1,34 +1,31 @@
 import os
-
-import libsql
+import sqlite3
 
 
 def _get_conn():
-    return libsql.connect(
-        os.environ["PLATFORM_TURSO_URL"],
-        auth_token=os.environ["PLATFORM_TURSO_TOKEN"],
-    )
+    return sqlite3.connect(os.environ["PLATFORM_DB_PATH"])
 
 
 def init_platform_db() -> None:
     conn = _get_conn()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            username    TEXT NOT NULL UNIQUE,
-            api_key     TEXT NOT NULL UNIQUE,
-            turso_url   TEXT NOT NULL,
-            turso_token TEXT NOT NULL,
-            created_at  TEXT DEFAULT (datetime('now'))
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            username   TEXT NOT NULL UNIQUE,
+            workos_id  TEXT NOT NULL UNIQUE,
+            db_path    TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
         )
     """)
     conn.commit()
+    conn.close()
 
 
-def get_user_by_api_key(api_key: str) -> dict | None:
+def get_user_by_workos_id(workos_id: str) -> dict | None:
     conn = _get_conn()
-    cur = conn.execute("SELECT * FROM users WHERE api_key = ?", (api_key,))
+    cur = conn.execute("SELECT * FROM users WHERE workos_id = ?", (workos_id,))
     row = cur.fetchone()
+    conn.close()
     if not row:
         return None
     cols = [d[0] for d in cur.description]
