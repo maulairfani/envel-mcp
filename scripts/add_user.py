@@ -1,29 +1,36 @@
+"""
+Tambah user baru ke users.json.
+
+Usage:
+    python scripts/add_user.py
+"""
+import json
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-load_dotenv()
-
-from rejeki.platform_db import init_platform_db, _get_conn  # noqa: E402
-
 # ── Isi di sini ──────────────────────────────────────────────────────────────
-USERNAME  = "irfani"
-WORKOS_ID = "user_01KN4J79EDG667XRSCTZJ33KSQ"  # WorkOS user ID
-DB_PATH   = "./users/irfani.db"                 # path SQLite file user ini
+USERNAME = "irfani"
+PASSWORD = "ganti-password-ini"
+DB_PATH  = str(Path(__file__).parent.parent / "users" / "irfani.db")
 # ─────────────────────────────────────────────────────────────────────────────
 
-init_platform_db()
+USERS_FILE = Path(__file__).parent.parent / "users.json"
 
-conn = _get_conn()
-conn.execute(
-    "INSERT INTO users (username, workos_id, db_path) VALUES (?, ?, ?)",
-    (USERNAME, WORKOS_ID, DB_PATH),
-)
-conn.commit()
-conn.close()
+users: dict = {}
+if USERS_FILE.exists():
+    users = json.loads(USERS_FILE.read_text())
 
-print(f"User '{USERNAME}' berhasil ditambahkan.")
-print(f"WorkOS ID: {WORKOS_ID}")
-print(f"DB path:   {DB_PATH}")
+if USERNAME in users:
+    print(f"User '{USERNAME}' sudah ada. Update? (y/N) ", end="")
+    if input().strip().lower() != "y":
+        sys.exit(0)
+
+users[USERNAME] = {"password": PASSWORD, "db": DB_PATH}
+USERS_FILE.write_text(json.dumps(users, indent=2, ensure_ascii=False))
+
+# Pastikan direktori users ada
+Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+
+print(f"User '{USERNAME}' berhasil ditambahkan ke {USERS_FILE}.")
+print(f"DB path: {DB_PATH}")
+print(f"PENTING: Ganti password di users.json sebelum deploy!")

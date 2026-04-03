@@ -1,0 +1,6 @@
+{
+  "irfani": {
+    "password": "ganti-password-ini",
+    "db": "/path/to/users/irfani.db"
+  }
+}

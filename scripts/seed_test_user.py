@@ -1,5 +1,5 @@
 """
-Seed a test user into platform.db and populate their SQLite DB with
+Seed a test user into users.json and populate their SQLite DB with
 3 months of realistic finance data (Jan–Mar 2025).
 
 Usage:
@@ -7,48 +7,42 @@ Usage:
 
 The test user will have:
     username  : testuser
-    workos_id : test-user-eval-001
     db_path   : ./users/test.db
 
 To connect to the server as this user, set:
     TEST_TOKEN=eval-token-secret-123
+    TEST_DB=./users/test.db
 """
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from dotenv import load_dotenv
-load_dotenv()
-
-from rejeki.platform_db import init_platform_db, _get_conn  # noqa: E402
-from rejeki.database import Database, init_db              # noqa: E402
+from rejeki.database import Database, init_db  # noqa: E402
 
 # ── Config ────────────────────────────────────────────────────────────────────
 USERNAME  = "testuser"
-WORKOS_ID = "test-user-eval-001"
+PASSWORD  = "testpassword"
 DB_PATH   = "./users/test.db"
 # ─────────────────────────────────────────────────────────────────────────────
 
 Path("./users").mkdir(exist_ok=True)
 
-# ── 1. Register in platform DB ────────────────────────────────────────────────
-init_platform_db()
-platform = _get_conn()
-existing = platform.execute("SELECT id FROM users WHERE workos_id = ?", (WORKOS_ID,)).fetchone()
-if existing:
-    platform.close()
-    print(f"User '{USERNAME}' sudah ada, skip registrasi platform.")
+# ── 1. Register in users.json ─────────────────────────────────────────────────
+USERS_FILE = Path(__file__).parent.parent / "users.json"
+users: dict = {}
+if USERS_FILE.exists():
+    users = json.loads(USERS_FILE.read_text())
+
+if USERNAME not in users:
+    users[USERNAME] = {"password": PASSWORD, "db": DB_PATH}
+    USERS_FILE.write_text(json.dumps(users, indent=2, ensure_ascii=False))
+    print(f"User '{USERNAME}' berhasil didaftarkan di users.json.")
 else:
-    platform.execute(
-        "INSERT INTO users (username, workos_id, db_path) VALUES (?, ?, ?)",
-        (USERNAME, WORKOS_ID, DB_PATH),
-    )
-    platform.commit()
-    platform.close()
-    print(f"User '{USERNAME}' berhasil didaftarkan.")
+    print(f"User '{USERNAME}' sudah ada di users.json, skip.")
 
 # ── 2. Seed user DB ───────────────────────────────────────────────────────────
 conn = sqlite3.connect(DB_PATH)
@@ -284,7 +278,6 @@ conn.close()
 # ── Summary ───────────────────────────────────────────────────────────────────
 print(f"\nTest user berhasil di-seed!")
 print(f"  username  : {USERNAME}")
-print(f"  workos_id : {WORKOS_ID}")
 print(f"  db_path   : {DB_PATH}")
 print(f"\nAccount balances:")
 for aid, name in [(1, "BCA"), (2, "GoPay"), (3, "Tunai")]:
