@@ -1,5 +1,7 @@
 import contextlib
+import json
 import os
+from datetime import datetime
 
 import httpx
 from dotenv import load_dotenv
@@ -111,9 +113,12 @@ mcp = FastMCP(
         ],
     ),
     instructions=(
-        "Tools untuk aplikasi personal envelope-budgeting. "
+        "Aplikasi personal envelope-budgeting. "
         "Melacak rekening, kategori envelope, transaksi, dan aset. "
-        "Format tanggal: YYYY-MM-DD. Nominal dalam IDR."
+        "Format tanggal: YYYY-MM-DD. Nominal dalam IDR. "
+        "Resources (finance://) untuk membaca data. "
+        "Tools untuk aksi: tambah, edit, hapus, assign, approve. "
+        "Prompts tersedia untuk workflow: budget_review, monthly_planning, onboarding_guide."
     ),
 )
 
@@ -129,11 +134,11 @@ def finance_add_account(name: str, type: str, initial_balance: float = 0) -> dic
         return accounts.add_account(db, name, type, initial_balance)
 
 
-@mcp.tool()
-def finance_get_accounts() -> dict:
-    """List semua rekening beserta saldo dan total keseluruhan."""
+@mcp.resource("finance://accounts")
+def resource_accounts() -> str:
+    """Semua rekening beserta saldo dan total keseluruhan."""
     with get_user_db() as db:
-        return accounts.get_accounts(db)
+        return json.dumps(accounts.get_accounts(db))
 
 
 @mcp.tool()
@@ -161,11 +166,11 @@ def finance_delete_account(id: int) -> dict:
 # Envelope groups
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
-def finance_get_groups() -> list:
-    """List semua kelompok envelope."""
+@mcp.resource("finance://groups")
+def resource_groups() -> str:
+    """Semua kelompok envelope."""
     with get_user_db() as db:
-        return envelopes.get_groups(db)
+        return json.dumps(envelopes.get_groups(db))
 
 
 @mcp.tool()
@@ -179,16 +184,15 @@ def finance_add_group(name: str, sort_order: int = 0) -> dict:
 # Envelopes — CRUD + budget view
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
-def finance_get_envelopes(period: str | None = None) -> dict:
+@mcp.resource("finance://envelopes/{period}")
+def resource_envelopes(period: str) -> str:
     """
-    Tampilkan semua envelope.
-    Income sources: referensi untuk mencatat pemasukan.
-    Expense envelopes per kelompok: carryover, assigned, activity, available, target.
-    period format YYYY-MM (default bulan ini).
+    Semua envelope untuk period tertentu.
+    Income sources + expense envelopes per kelompok: carryover, assigned, activity, available, target.
+    Gunakan 'current' untuk bulan ini, atau format YYYY-MM untuk bulan spesifik.
     """
     with get_user_db() as db:
-        return envelopes.get_envelopes(db, period)
+        return json.dumps(envelopes.get_envelopes(db, None if period == "current" else period))
 
 
 @mcp.tool()
@@ -281,11 +285,7 @@ def finance_add_transaction(
     transaction_date: str | None = None,
 ) -> dict:
     """
-    Catat transaksi dengan ID eksplisit. Gunakan ini hanya untuk:
-    - income dan transfer (bukan expense sehari-hari)
-    - saat perlu kontrol penuh atas account_id / envelope_id / tanggal
-
-    Untuk expense sehari-hari, gunakan finance_quick_add — lebih cepat dan tidak perlu ID.
+    Catat transaksi baru.
     type: income | expense | transfer.
     transaction_date format YYYY-MM-DD (default hari ini).
     """
@@ -366,11 +366,11 @@ def finance_add_scheduled_transaction(
         )
 
 
-@mcp.tool()
-def finance_get_scheduled_transactions(include_inactive: bool = False) -> list:
-    """List transaksi terjadwal, termasuk field days_until (berapa hari lagi)."""
+@mcp.resource("finance://scheduled-transactions")
+def resource_scheduled_transactions() -> str:
+    """Transaksi terjadwal yang aktif, termasuk field days_until (berapa hari lagi)."""
     with get_user_db() as db:
-        return scheduled.get_scheduled_transactions(db, include_inactive)
+        return json.dumps(scheduled.get_scheduled_transactions(db, include_inactive=False))
 
 
 @mcp.tool()
@@ -404,41 +404,35 @@ def finance_delete_scheduled_transaction(id: int) -> dict:
 # Analytics
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
-def finance_get_onboarding_status() -> dict:
+@mcp.resource("finance://onboarding-status")
+def resource_onboarding_status() -> str:
+    """Status onboarding: rekening, targets, envelope assignment, RTA. Baca di awal sesi baru."""
+    with get_user_db() as db:
+        return json.dumps(analytics.get_onboarding_status(db))
+
+
+@mcp.resource("finance://ready-to-assign/{period}")
+def resource_ready_to_assign(period: str) -> str:
     """
-    Cek status onboarding: rekening, targets, envelope assignment, RTA.
-    Panggil ini di awal setiap sesi baru.
+    Ready to Assign = total saldo rekening − total available semua envelope.
+    Target: nol. Gunakan 'current' untuk bulan ini, atau YYYY-MM untuk bulan spesifik.
     """
     with get_user_db() as db:
-        return analytics.get_onboarding_status(db)
+        return json.dumps(analytics.get_ready_to_assign(db, None if period == "current" else period))
 
 
-@mcp.tool()
-def finance_get_ready_to_assign(period: str | None = None) -> dict:
-    """
-    Hitung Ready to Assign = total saldo rekening − total available semua envelope.
-    Target: nol. Setiap rupiah harus punya tugas.
-    """
+@mcp.resource("finance://age-of-money")
+def resource_age_of_money() -> str:
+    """Age of Money: rata-rata berapa hari uang duduk sebelum dipakai. Dihitung FIFO. Target: 30+ hari."""
     with get_user_db() as db:
-        return analytics.get_ready_to_assign(db, period)
+        return json.dumps(analytics.get_age_of_money(db))
 
 
-@mcp.tool()
-def finance_get_age_of_money() -> dict:
-    """
-    Hitung Age of Money: rata-rata berapa hari uang duduk sebelum dipakai.
-    Dihitung FIFO. Target: 30+ hari.
-    """
+@mcp.resource("finance://summary/{period}")
+def resource_summary(period: str) -> str:
+    """Ringkasan bulanan: income, expense, net, breakdown per envelope. Gunakan 'current' atau YYYY-MM."""
     with get_user_db() as db:
-        return analytics.get_age_of_money(db)
-
-
-@mcp.tool()
-def finance_get_summary(period: str | None = None) -> dict:
-    """Ringkasan bulanan: income, expense, net, breakdown per envelope. period: YYYY-MM."""
-    with get_user_db() as db:
-        return analytics.get_summary(db, period)
+        return json.dumps(analytics.get_summary(db, None if period == "current" else period))
 
 
 @mcp.tool()
@@ -446,6 +440,55 @@ def finance_get_spending_trend(envelope_id: int | None = None, months: int = 3) 
     """Tren pengeluaran per envelope, N bulan ke belakang."""
     with get_user_db() as db:
         return analytics.get_spending_trend(db, envelope_id, months)
+
+
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
+
+@mcp.prompt
+def budget_review(period: str | None = None) -> str:
+    """Review budget bulanan: analisis overspend dan saran rebalancing."""
+    p = period or datetime.now().strftime("%Y-%m")
+    return (
+        f"Lakukan review budget bulan {p}:\n\n"
+        f"1. Baca resource finance://summary/{p} untuk ringkasan income, expense, dan net.\n"
+        f"2. Baca resource finance://envelopes/{p} untuk detail setiap envelope "
+        f"(carryover, assigned, activity, available).\n"
+        f"3. Identifikasi envelope yang overspend (available negatif).\n"
+        f"4. Berikan ringkasan: envelope mana yang konsisten, mana yang perlu perhatian.\n"
+        f"5. Jika ada RTA tersisa di finance://ready-to-assign/{p}, sarankan alokasi ke envelope yang kekurangan."
+    )
+
+
+@mcp.prompt
+def monthly_planning(period: str | None = None) -> str:
+    """Panduan distribusi budget awal bulan: cek RTA, lihat targets, assign hingga RTA = 0."""
+    p = period or datetime.now().strftime("%Y-%m")
+    return (
+        f"Bantu planning budget bulan {p}:\n\n"
+        f"1. Baca finance://ready-to-assign/{p} — lihat berapa uang yang belum dialokasikan.\n"
+        f"2. Baca finance://envelopes/{p} — lihat target setiap envelope dan available saat ini.\n"
+        f"3. Prioritaskan envelope dengan target 'monthly' yang belum terpenuhi.\n"
+        f"4. Untuk envelope 'goal', cek apakah on track menuju deadline.\n"
+        f"5. Distribusikan RTA ke envelope yang paling butuh hingga RTA = 0.\n"
+        f"Gunakan finance_assign_to_envelope untuk setiap alokasi. Tanya user jika ada prioritas khusus."
+    )
+
+
+@mcp.prompt
+def onboarding_guide() -> str:
+    """Wizard setup Rejeki dari awal: rekening → envelope → budget."""
+    return (
+        "Bantu setup Rejeki dari awal:\n\n"
+        "1. Baca finance://onboarding-status untuk melihat progress saat ini.\n"
+        "2. Jika belum ada rekening: tambah dengan finance_add_account (type: bank | ewallet | cash).\n"
+        "3. Buat kelompok envelope dengan finance_add_group (contoh: Kebutuhan, Keinginan, Tabungan).\n"
+        "4. Buat envelope untuk setiap kategori dengan finance_add_envelope (type: income | expense).\n"
+        "5. Set target dengan finance_set_target untuk envelope yang punya target bulanan atau goal.\n"
+        "6. Assign budget ke setiap envelope dengan finance_assign_to_envelope hingga RTA = 0.\n\n"
+        "Tanyakan user mau mulai dari step mana, atau ikuti step berikutnya yang belum selesai."
+    )
 
 
 # ---------------------------------------------------------------------------
