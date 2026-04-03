@@ -6,6 +6,9 @@
 # Environment
 .env
 
+# Credentials
+users.json
+
 # Python
 __pycache__/
 *.pyc
