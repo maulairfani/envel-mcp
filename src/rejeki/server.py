@@ -16,7 +16,6 @@ from starlette.routing import Mount, Route
 from rejeki.database import Database
 from rejeki.deps import _db_path, get_user_db
 from rejeki.tools import accounts, analytics, envelopes, scheduled, transactions
-from rejeki.tools import quick_add as _quick_add
 
 load_dotenv()
 
@@ -264,24 +263,6 @@ def finance_move_money(
     """
     with get_user_db() as db:
         return envelopes.move_money(db, from_envelope_id, to_envelope_id, amount, period)
-
-
-# ---------------------------------------------------------------------------
-# Quick add
-# ---------------------------------------------------------------------------
-
-@mcp.tool()
-def finance_quick_add(text: str) -> dict:
-    """
-    GUNAKAN INI sebagai satu-satunya cara mencatat pengeluaran sehari-hari.
-    JANGAN panggil finance_get_accounts atau finance_get_envelopes terlebih dahulu —
-    tool ini sudah menangani resolusi rekening dan envelope secara internal.
-
-    Otomatis deteksi: nominal, rekening, envelope, payee.
-    Contoh input: 'makan ayam 15k gopay', 'bensin 50rb bca', 'kopi kenangan 35000 dana'
-    """
-    with get_user_db() as db:
-        return _quick_add.quick_add(db, text)
 
 
 # ---------------------------------------------------------------------------
