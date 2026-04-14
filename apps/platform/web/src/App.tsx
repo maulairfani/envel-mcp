@@ -16,9 +16,13 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { DashboardPage } from "@/pages/DashboardPage"
+import { TransactionsPage } from "@/pages/TransactionsPage"
+import { EnvelopesPage } from "@/pages/EnvelopesPage"
 
 const BREADCRUMBS: Record<string, string> = {
   "/dashboard": "Dashboard",
+  "/transactions": "Transactions",
+  "/envelopes": "Envelopes",
 }
 
 export default function App() {
@@ -62,6 +66,8 @@ export default function App() {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <Routes>
             <Route path="/dashboard" element={<DashboardPage showNominal={showNominal} />} />
+            <Route path="/transactions" element={<TransactionsPage showNominal={showNominal} />} />
+            <Route path="/envelopes" element={<EnvelopesPage showNominal={showNominal} />} />
             <Route path="*" element={<DashboardPage showNominal={showNominal} />} />
           </Routes>
         </div>
