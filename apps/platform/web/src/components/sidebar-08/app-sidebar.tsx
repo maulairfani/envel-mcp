@@ -62,7 +62,14 @@ const data = {
   ],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+import type { Theme } from "@/hooks/useTheme"
+
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  theme: Theme
+  setTheme: (t: Theme) => void
+}
+
+export function AppSidebar({ theme, setTheme, ...props }: AppSidebarProps) {
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -85,7 +92,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={data.user} theme={theme} setTheme={setTheme} />
       </SidebarFooter>
     </Sidebar>
   )

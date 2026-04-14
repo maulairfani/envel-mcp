@@ -4,7 +4,10 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
-  Sparkles,
+  Monitor,
+  Moon,
+  Palette,
+  Sun,
 } from "lucide-react"
 
 import {
@@ -18,7 +21,12 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -27,15 +35,22 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import type { Theme } from "@/hooks/useTheme"
+
+const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
+  { value: "light", label: "Light", icon: <Sun className="size-4" /> },
+  { value: "dark", label: "Dark", icon: <Moon className="size-4" /> },
+  { value: "system", label: "System", icon: <Monitor className="size-4" /> },
+]
 
 export function NavUser({
   user,
+  theme,
+  setTheme,
 }: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
+  user: { name: string; email: string; avatar: string }
+  theme: Theme
+  setTheme: (t: Theme) => void
 }) {
   const { isMobile } = useSidebar()
 
@@ -67,24 +82,41 @@ export function NavUser({
             align="end"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="p-0 font-normal">
+                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarImage src={user.avatar} alt={user.name} />
+                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">{user.name}</span>
+                    <span className="truncate text-xs">{user.email}</span>
+                  </div>
                 </div>
-              </div>
-            </DropdownMenuLabel>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles />
-                Upgrade to Pro
-              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Palette className="size-4" />
+                  Appearance
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuRadioGroup
+                    value={theme}
+                    onValueChange={(v) => setTheme(v as Theme)}
+                  >
+                    {THEME_OPTIONS.map((opt) => (
+                      <DropdownMenuRadioItem key={opt.value} value={opt.value}>
+                        {opt.icon}
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
