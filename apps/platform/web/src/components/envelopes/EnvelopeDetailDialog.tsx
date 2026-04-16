@@ -9,13 +9,6 @@ import {
 } from "@/components/ui/dialog"
 import type { Envelope, EnvelopeBudget, TargetType } from "@/hooks/useEnvelopes"
 
-const TARGET_TYPE_LABELS: Record<TargetType, string> = {
-  monthly_spending: "Monthly spending limit",
-  monthly_savings: "Save per month",
-  savings_balance: "Savings goal",
-  needed_by_date: "Needed by date",
-}
-
 const TARGET_TYPE_OPTIONS: { value: TargetType | "none"; label: string }[] = [
   { value: "none", label: "No target" },
   { value: "monthly_spending", label: "Monthly spending limit" },

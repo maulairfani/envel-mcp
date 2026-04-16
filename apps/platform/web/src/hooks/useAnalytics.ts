@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/lib/api"
+
 export interface ChartDay {
   date: string
   dateRaw: string
@@ -15,72 +18,71 @@ export interface DailyExpenseData {
   envelopes: EnvelopeSeries[]
 }
 
-const ENVELOPES: EnvelopeSeries[] = [
-  { id: 1, name: "Food & Drinks" },
-  { id: 2, name: "Transport" },
-  { id: 3, name: "Shopping" },
-  { id: 4, name: "Bills" },
-  { id: 5, name: "Health" },
+// ── API response row ────────────────────────────────────
+
+interface DailyExpenseRow {
+  day: string
+  envelope_id: number
+  envelope_name: string
+  amount: number
+}
+
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ]
 
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+function transformDaily(rows: DailyExpenseRow[]): DailyExpenseData {
+  // Collect unique envelopes
+  const envMap = new Map<number, string>()
+  for (const r of rows) envMap.set(r.envelope_id, r.envelope_name)
+  const envelopes: EnvelopeSeries[] = Array.from(envMap.entries())
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
-function makeDay(isoDate: string): ChartDay {
-  const [, m, d] = isoDate.split("-")
-  const label = `${MONTHS[parseInt(m) - 1]} ${parseInt(d)}`
-  const hasSpend = Math.random() > 0.25
-
-  const row: ChartDay = { date: label, dateRaw: isoDate, total: 0 }
-  if (!hasSpend) {
-    for (const e of ENVELOPES) row[e.name] = 0
-    return row
+  // Group by day
+  const dayMap = new Map<string, Record<string, number>>()
+  for (const r of rows) {
+    if (!dayMap.has(r.day)) dayMap.set(r.day, {})
+    const entry = dayMap.get(r.day)!
+    entry[r.envelope_name] = (entry[r.envelope_name] ?? 0) + r.amount
   }
 
-  for (const e of ENVELOPES) {
-    const spend = Math.random() > 0.5 ? Math.round((Math.random() * 150_000 + 10_000) / 1000) * 1000 : 0
-    row[e.name] = spend
-    row.total += spend
-  }
-  return row
+  const chartData: ChartDay[] = Array.from(dayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([iso, byEnvelope]) => {
+      const [, m, d] = iso.split("-")
+      const label = `${MONTHS[parseInt(m) - 1]} ${parseInt(d)}`
+      let total = 0
+      const row: ChartDay = { date: label, dateRaw: iso, total: 0 }
+      for (const env of envelopes) {
+        const val = byEnvelope[env.name] ?? 0
+        row[env.name] = val
+        total += val
+      }
+      row.total = total
+      return row
+    })
+
+  return { chartData, envelopes }
 }
 
-function buildStaticData(): DailyExpenseData {
-  const days: string[] = []
-  const now = new Date()
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    days.push(d.toISOString().slice(0, 10))
-  }
+// ── Hook ────────────────────────────────────────────────
 
-  // Seed-like: reset random seed by using fixed values per slot
-  const seeded = days.map((iso, i) => {
-    // Simple deterministic-ish spread via index
-    const r = ((i * 7 + 3) % 10) / 10
-    const hasSpend = r > 0.2
-    const row: ChartDay = { date: "", dateRaw: iso, total: 0 }
-    const [, m, d] = iso.split("-")
-    row.date = `${MONTHS[parseInt(m) - 1]} ${parseInt(d)}`
-    for (const [j, e] of ENVELOPES.entries()) {
-      const base = [85_000, 45_000, 120_000, 200_000, 35_000][j]
-      const spend = hasSpend && ((i + j * 3) % 3 !== 0)
-        ? Math.round((base * (0.5 + ((i * j + 1) % 7) / 7)) / 1000) * 1000
-        : 0
-      row[e.name] = spend
-      row.total += spend
-    }
-    return row
-  })
-
-  return { chartData: seeded, envelopes: ENVELOPES }
-}
-
-const STATIC_DATA = buildStaticData()
-
-export function useDailyExpenses(_days = 30): {
+export function useDailyExpenses(days = 30): {
   data: DailyExpenseData | null
   loading: boolean
   error: string | null
 } {
-  return { data: STATIC_DATA, loading: false, error: null }
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["analytics", "daily-expenses", days],
+    queryFn: () =>
+      api<DailyExpenseRow[]>(`/api/analytics/daily-expenses?days=${days}`),
+  })
+
+  return {
+    data: data ? transformDaily(data) : null,
+    loading: isLoading,
+    error: error ? (error as Error).message : null,
+  }
 }

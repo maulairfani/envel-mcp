@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Loader2 } from "lucide-react"
 import {
   useTransactions,
   filterTransactions,
@@ -11,7 +12,6 @@ import {
 import {
   PeriodPicker,
   currentPeriod,
-  filterByPeriod,
 } from "@/components/shared/PeriodPicker"
 import { TransactionDayGroup } from "@/components/transactions/TransactionDayGroup"
 import { Card, CardContent } from "@/components/ui/card"
@@ -28,18 +28,15 @@ export function TransactionsPage({
 }: {
   showNominal: boolean
 }) {
-  const { transactions, accounts, envelopes } = useTransactions()
   const [period, setPeriod] = useState(currentPeriod)
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
 
-  const periodFiltered = useMemo(
-    () => filterByPeriod(transactions, period),
-    [transactions, period]
-  )
+  const { transactions, accounts, envelopes, isLoading } =
+    useTransactions(period)
 
   const filtered = useMemo(
-    () => filterTransactions(periodFiltered, filters),
-    [periodFiltered, filters]
+    () => filterTransactions(transactions, filters),
+    [transactions, filters]
   )
 
   const days = useMemo(() => groupByDay(filtered), [filtered])
@@ -59,7 +56,11 @@ export function TransactionsPage({
 
       <Card>
         <CardContent className="p-0">
-          {days.length === 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : days.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
               No transactions found
             </div>

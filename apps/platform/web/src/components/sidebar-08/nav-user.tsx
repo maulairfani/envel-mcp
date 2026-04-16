@@ -36,6 +36,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { Theme } from "@/hooks/useTheme"
+import { useAuth } from "@/hooks/useAuth"
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: React.ReactNode }[] = [
   { value: "light", label: "Light", icon: <Sun className="size-4" /> },
@@ -53,6 +54,7 @@ export function NavUser({
   setTheme: (t: Theme) => void
 }) {
   const { isMobile } = useSidebar()
+  const { logout } = useAuth()
 
   return (
     <SidebarMenu>
@@ -134,7 +136,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={logout}>
               <LogOut />
               Log out
             </DropdownMenuItem>

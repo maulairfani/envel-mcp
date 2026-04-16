@@ -2,6 +2,7 @@ import * as React from "react"
 import { Link } from "react-router-dom"
 import {
   CreditCard,
+  Heart,
   LayoutDashboard,
   LifeBuoy,
   List,
@@ -12,6 +13,7 @@ import {
 import { NavMain } from "@/components/sidebar-08/nav-main"
 import { NavSecondary } from "@/components/sidebar-08/nav-secondary"
 import { NavUser } from "@/components/sidebar-08/nav-user"
+import { useAuth } from "@/hooks/useAuth"
 import {
   Sidebar,
   SidebarContent,
@@ -23,11 +25,6 @@ import {
 } from "@/components/ui/sidebar"
 
 const data = {
-  user: {
-    name: "User",
-    email: "user@envel.app",
-    avatar: "",
-  },
   navMain: [
     {
       title: "Envelopes",
@@ -49,6 +46,11 @@ const data = {
       url: "/accounts",
       icon: CreditCard,
     },
+    {
+      title: "Wishlist",
+      url: "/wishlist",
+      icon: Heart,
+    },
   ],
   navSecondary: [
     { title: "Support", url: "#", icon: LifeBuoy },
@@ -64,6 +66,14 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({ theme, setTheme, ...props }: AppSidebarProps) {
+  const { username } = useAuth()
+
+  const user = {
+    name: username ?? "User",
+    email: username ? `${username}@envel.app` : "user@envel.app",
+    avatar: "",
+  }
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -86,7 +96,7 @@ export function AppSidebar({ theme, setTheme, ...props }: AppSidebarProps) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} theme={theme} setTheme={setTheme} />
+        <NavUser user={user} theme={theme} setTheme={setTheme} />
       </SidebarFooter>
     </Sidebar>
   )

@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react"
-import { Route, Routes, useLocation } from "react-router-dom"
-import { Eye, EyeOff } from "lucide-react"
+import { Route, Routes, Navigate, useLocation } from "react-router-dom"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { AppSidebar } from "@/components/sidebar-08/app-sidebar"
 import { useTheme } from "@/hooks/useTheme"
+import { useAuth } from "@/hooks/useAuth"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,15 +20,41 @@ import { DashboardPage } from "@/pages/DashboardPage"
 import { TransactionsPage } from "@/pages/TransactionsPage"
 import { EnvelopesPage } from "@/pages/EnvelopesPage"
 import { AccountsPage } from "@/pages/AccountsPage"
+import { WishlistPage } from "@/pages/WishlistPage"
+import { LoginPage } from "@/pages/LoginPage"
 
 const BREADCRUMBS: Record<string, string> = {
   "/envelopes": "Envelopes",
   "/transactions": "Transactions",
   "/analytics": "Analytics",
   "/accounts": "Accounts",
+  "/wishlist": "Wishlist",
 }
 
 export default function App() {
+  const { authenticated, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!authenticated) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
+  }
+
+  return <AuthenticatedApp />
+}
+
+function AuthenticatedApp() {
   const { pathname } = useLocation()
   const title = BREADCRUMBS[pathname] ?? "Envelopes"
   const [showNominal, setShowNominal] = useState(
@@ -79,8 +106,9 @@ export default function App() {
             <Route path="/envelopes" element={<EnvelopesPage showNominal={showNominal} />} />
             <Route path="/transactions" element={<TransactionsPage showNominal={showNominal} />} />
             <Route path="/analytics" element={<DashboardPage showNominal={showNominal} />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="*" element={<EnvelopesPage showNominal={showNominal} />} />
+            <Route path="/accounts" element={<AccountsPage showNominal={showNominal} />} />
+            <Route path="/wishlist" element={<WishlistPage showNominal={showNominal} />} />
+            <Route path="*" element={<Navigate to="/envelopes" replace />} />
           </Routes>
         </div>
       </SidebarInset>

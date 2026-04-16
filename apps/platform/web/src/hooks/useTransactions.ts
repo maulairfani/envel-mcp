@@ -1,3 +1,6 @@
+import { useQuery } from "@tanstack/react-query"
+import { api } from "@/lib/api"
+
 export type TransactionType = "income" | "expense" | "transfer"
 
 export interface Transaction {
@@ -9,136 +12,44 @@ export interface Transaction {
   toAccount: string | null
   payee: string | null
   memo: string | null
-  date: string // ISO date string YYYY-MM-DD
+  date: string // ISO date string
 }
 
 export interface DayGroup {
-  date: string // ISO YYYY-MM-DD
+  date: string
   income: number
   expense: number
   transactions: Transaction[]
 }
 
-const ACCOUNTS = ["BCA", "GoPay", "Cash", "Mandiri"]
-const ENVELOPES_EXPENSE = [
-  "Food",
-  "Transport",
-  "Shopping",
-  "Bills",
-  "Health",
-  "Subscriptions",
-  "Entertainment",
-  "Education",
-]
-const ENVELOPES_INCOME = ["Salary", "Freelance", "Other Income"]
+// ── API response row ────────────────────────────────────
 
-const PAYEES_EXPENSE: Record<string, string[]> = {
-  Food: ["Warteg Bahari", "Indomaret", "Alfamart", "Grab Food", "Kopi Kenangan"],
-  Transport: ["Grab", "Gojek", "Transjakarta", "Pertamina"],
-  Shopping: ["Tokopedia", "Shopee", "Uniqlo"],
-  Bills: ["PLN", "Indihome", "BPJS"],
-  Health: ["Apotek K-24", "Halodoc", "Kimia Farma"],
-  Subscriptions: ["Spotify", "Netflix", "YouTube Premium", "iCloud"],
-  Entertainment: ["CGV", "Steam", "Timezone"],
-  Education: ["Udemy", "Gramedia", "Periplus"],
+interface TransactionRow {
+  id: number
+  date: string
+  type: TransactionType
+  amount: number
+  payee: string | null
+  memo: string | null
+  account_name: string | null
+  envelope_name: string | null
 }
 
-const PAYEES_INCOME = ["PT Maju Sejahtera", "Client — Tokopedia", "Transfer In"]
-
-// Simple seeded PRNG for deterministic data
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+function transformRow(r: TransactionRow): Transaction {
+  return {
+    id: r.id,
+    amount: r.amount,
+    type: r.type,
+    envelope: r.envelope_name,
+    account: r.account_name ?? "—",
+    toAccount: null,
+    payee: r.payee,
+    memo: r.memo,
+    date: r.date.slice(0, 10), // normalize to YYYY-MM-DD
   }
 }
 
-function buildMockTransactions(): Transaction[] {
-  const rand = mulberry32(42)
-  const txns: Transaction[] = []
-  let id = 1
-
-  const now = new Date()
-  // Generate 60 days of data
-  for (let dayOffset = 59; dayOffset >= 0; dayOffset--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - dayOffset)
-    const iso = d.toISOString().slice(0, 10)
-
-    // 1-5 expense transactions per day
-    const expenseCount = Math.floor(rand() * 4) + 1
-    for (let i = 0; i < expenseCount; i++) {
-      const envelope =
-        ENVELOPES_EXPENSE[Math.floor(rand() * ENVELOPES_EXPENSE.length)]
-      const payees = PAYEES_EXPENSE[envelope]
-      const payee = payees[Math.floor(rand() * payees.length)]
-      const amount =
-        Math.round((rand() * 180_000 + 8_000) / 1000) * 1000
-
-      txns.push({
-        id: id++,
-        amount,
-        type: "expense",
-        envelope,
-        account: ACCOUNTS[Math.floor(rand() * ACCOUNTS.length)],
-        toAccount: null,
-        payee,
-        memo: null,
-        date: iso,
-      })
-    }
-
-    // ~20% chance of income on a given day
-    if (rand() < 0.2) {
-      const envelope =
-        ENVELOPES_INCOME[Math.floor(rand() * ENVELOPES_INCOME.length)]
-      const payee =
-        PAYEES_INCOME[Math.floor(rand() * PAYEES_INCOME.length)]
-      const amount =
-        Math.round((rand() * 8_000_000 + 2_000_000) / 10000) * 10000
-
-      txns.push({
-        id: id++,
-        amount,
-        type: "income",
-        envelope: null,
-        account: ACCOUNTS[Math.floor(rand() * ACCOUNTS.length)],
-        toAccount: null,
-        payee,
-        memo: null,
-        date: iso,
-      })
-    }
-
-    // ~10% chance of transfer
-    if (rand() < 0.1) {
-      const fromIdx = Math.floor(rand() * ACCOUNTS.length)
-      let toIdx = Math.floor(rand() * (ACCOUNTS.length - 1))
-      if (toIdx >= fromIdx) toIdx++
-      const amount =
-        Math.round((rand() * 1_000_000 + 100_000) / 10000) * 10000
-
-      txns.push({
-        id: id++,
-        amount,
-        type: "transfer",
-        envelope: null,
-        account: ACCOUNTS[fromIdx],
-        toAccount: ACCOUNTS[toIdx],
-        payee: null,
-        memo: `Transfer to ${ACCOUNTS[toIdx]}`,
-        date: iso,
-      })
-    }
-  }
-
-  return txns
-}
-
-const MOCK_TRANSACTIONS = buildMockTransactions()
+// ── Grouping & filtering ────────────────────────────────
 
 export function groupByDay(transactions: Transaction[]): DayGroup[] {
   const map = new Map<string, Transaction[]>()
@@ -149,7 +60,6 @@ export function groupByDay(transactions: Transaction[]): DayGroup[] {
     map.set(txn.date, list)
   }
 
-  // Sort days descending (most recent first)
   const days = Array.from(map.entries()).sort(([a], [b]) =>
     b.localeCompare(a)
   )
@@ -197,10 +107,26 @@ export function filterTransactions(
   })
 }
 
-export function useTransactions() {
-  return {
-    transactions: MOCK_TRANSACTIONS,
-    accounts: ACCOUNTS,
-    envelopes: [...ENVELOPES_INCOME, ...ENVELOPES_EXPENSE],
-  }
+// ── Hook ────────────────────────────────────────────────
+
+export function useTransactions(period?: string) {
+  const params = new URLSearchParams()
+  if (period) params.set("period", period)
+  params.set("limit", "500")
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["transactions", period ?? "all"],
+    queryFn: () =>
+      api<TransactionRow[]>(`/api/transactions?${params.toString()}`),
+  })
+
+  const transactions = (data ?? []).map(transformRow)
+
+  // Derive unique accounts and envelopes for filter dropdowns
+  const accounts = [...new Set(transactions.map((t) => t.account))].sort()
+  const envelopes = [
+    ...new Set(transactions.map((t) => t.envelope).filter(Boolean) as string[]),
+  ].sort()
+
+  return { transactions, accounts, envelopes, isLoading, error }
 }

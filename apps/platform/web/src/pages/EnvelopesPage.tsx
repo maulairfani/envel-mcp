@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
+import { Loader2 } from "lucide-react"
 import { formatIDR } from "@/lib/format"
 import {
   useEnvelopes,
@@ -17,7 +18,7 @@ export function EnvelopesPage({
   showNominal: boolean
 }) {
   const [period, setPeriod] = useState(currentPeriod)
-  const { groups: initialGroups, allEnvelopes } = useEnvelopes(period)
+  const { groups: initialGroups, allEnvelopes, isLoading } = useEnvelopes(period)
 
   // Local budget overrides for cover actions
   const [overrides, setOverrides] = useState<Map<number, EnvelopeBudget>>(
@@ -110,6 +111,19 @@ export function EnvelopesPage({
       next.set(envelopeId, target)
       return next
     })
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <PeriodPicker period={period} onChange={handlePeriodChange} />
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    )
   }
 
   return (
