@@ -3,10 +3,12 @@ import { Link } from "react-router-dom"
 import {
   CreditCard,
   Heart,
+  HardDrive,
   LayoutDashboard,
   LifeBuoy,
   List,
   Send,
+  Settings,
   Wallet,
 } from "lucide-react"
 
@@ -50,6 +52,11 @@ const data = {
       title: "Wishlist",
       url: "/wishlist",
       icon: Heart,
+    },
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: Settings,
     },
   ],
   navSecondary: [

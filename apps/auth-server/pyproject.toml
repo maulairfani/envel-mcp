@@ -2,7 +2,7 @@
 name = "envel_auth"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["fastmcp", "uvicorn[standard]", "starlette", "pydantic", "python-dotenv", "bcrypt", "python-json-logger"]
+dependencies = ["fastmcp", "uvicorn[standard]", "starlette", "pydantic", "python-dotenv", "bcrypt", "python-json-logger", "httpx>=0.27"]
 
 [project.scripts]
 envel-auth = "envel_auth.server:main"

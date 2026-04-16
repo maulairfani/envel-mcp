@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,8 +22,28 @@ from envel_platform.routes.envelopes import router as envelopes_router
 from envel_platform.routes.scheduled import router as scheduled_router
 from envel_platform.routes.transactions import router as transactions_router
 from envel_platform.routes.wishlist import router as wishlist_router
+from envel_platform.routes.backup import router as backup_router
 
 load_dotenv()
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Start daily backup scheduler
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from envel_platform.backup import backup_all_users
+
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(backup_all_users, "cron", hour=2, minute=0)  # daily at 02:00 UTC
+        scheduler.start()
+        logging.getLogger("envel_platform").info("backup_scheduler_started")
+        yield
+        scheduler.shutdown()
+    except ImportError:
+        logging.getLogger("envel_platform").warning("apscheduler_not_installed_backup_disabled")
+        yield
+
 
 _SESSION_SECRET = os.environ.get("SESSION_SECRET")
 if not _SESSION_SECRET and not os.environ.get("TEST_TOKEN"):
@@ -31,7 +52,7 @@ if not _SESSION_SECRET and not os.environ.get("TEST_TOKEN"):
         "Set it to a long random string (e.g. openssl rand -hex 32)."
     )
 
-app = FastAPI(title="Envel Platform API")
+app = FastAPI(title="Envel Platform API", lifespan=_lifespan)
 
 _secure_cookies = os.environ.get("SECURE_COOKIES", "").lower() == "true"
 app.add_middleware(
@@ -72,6 +93,7 @@ app.include_router(envelopes_router, prefix="/api/envelopes", tags=["envelopes"]
 app.include_router(scheduled_router, prefix="/api/scheduled", tags=["scheduled"])
 app.include_router(transactions_router, prefix="/api/transactions", tags=["transactions"])
 app.include_router(wishlist_router, prefix="/api/wishlist", tags=["wishlist"])
+app.include_router(backup_router, prefix="/api/backup", tags=["backup"])
 
 # Serve React frontend build (production)
 _ui_dist = Path(__file__).parent.parent.parent.parent / "web" / "dist"

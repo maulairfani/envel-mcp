@@ -21,6 +21,7 @@ import { TransactionsPage } from "@/pages/TransactionsPage"
 import { EnvelopesPage } from "@/pages/EnvelopesPage"
 import { AccountsPage } from "@/pages/AccountsPage"
 import { WishlistPage } from "@/pages/WishlistPage"
+import { SettingsPage } from "@/pages/SettingsPage"
 import { LoginPage } from "@/pages/LoginPage"
 
 const BREADCRUMBS: Record<string, string> = {
@@ -29,6 +30,7 @@ const BREADCRUMBS: Record<string, string> = {
   "/analytics": "Analytics",
   "/accounts": "Accounts",
   "/wishlist": "Wishlist",
+  "/settings": "Settings",
 }
 
 export default function App() {
@@ -108,6 +110,7 @@ function AuthenticatedApp() {
             <Route path="/analytics" element={<DashboardPage showNominal={showNominal} />} />
             <Route path="/accounts" element={<AccountsPage showNominal={showNominal} />} />
             <Route path="/wishlist" element={<WishlistPage showNominal={showNominal} />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/envelopes" replace />} />
           </Routes>
         </div>

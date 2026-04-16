@@ -50,6 +50,14 @@ PLATFORM_SERVICE_SECRET = os.environ.get("PLATFORM_SERVICE_SECRET", "")
 AS_BASE_URL = os.environ.get("AS_BASE_URL", "https://maulairfani.my.id/envel/auth")
 MCP_SCOPE = "envel"
 
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = f"{AS_BASE_URL}/google/callback"
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+GOOGLE_SCOPES = "openid email profile https://www.googleapis.com/auth/drive.file"
+
 CREATE_USERS_TABLE = """
 CREATE TABLE IF NOT EXISTS users (
     username TEXT PRIMARY KEY,
@@ -83,7 +91,22 @@ def _get_users_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute(CREATE_USERS_TABLE)
     conn.executescript(CREATE_AUTH_TABLES)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Auto-apply schema changes. Safe to run repeatedly."""
+    for col, definition in [
+        ("google_sub",           "TEXT"),
+        ("google_email",         "TEXT"),
+        ("google_refresh_token", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} {definition}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
 
 def _get_user(username: str) -> dict | None:
@@ -105,6 +128,10 @@ class EnvelOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
         # Short-lived state — in-memory only (minutes lifetime, no need to persist)
         self.auth_codes: dict[str, AuthorizationCode] = {}
         self.state_mapping: dict[str, dict[str, Any]] = {}
+        # Google OAuth: maps google_state → mcp_state
+        self.google_state_mapping: dict[str, str] = {}
+        # Pending account links: maps link_token → google user info + mcp_state
+        self.pending_links: dict[str, dict[str, Any]] = {}
 
     def _check_credentials(self, username: str, password: str) -> bool:
         user = _get_user(username)
@@ -222,10 +249,168 @@ class EnvelOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
             conn.commit()
         logger.info("token_revoked", extra={"username": username})
 
+    # ── Google OAuth flow ──
+
+    async def handle_google_authorize(self, request: Request) -> Response:
+        """Step 1: redirect to Google, embedding the MCP state."""
+        mcp_state = request.query_params.get("mcp_state")
+        if not mcp_state or mcp_state not in self.state_mapping:
+            raise HTTPException(400, "Invalid MCP state")
+
+        google_state = secrets.token_hex(16)
+        self.google_state_mapping[google_state] = mcp_state
+
+        import urllib.parse
+        params = urllib.parse.urlencode({
+            "client_id": GOOGLE_CLIENT_ID,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": GOOGLE_SCOPES,
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": google_state,
+        })
+        return RedirectResponse(url=f"{GOOGLE_AUTH_URL}?{params}", status_code=302)
+
+    async def handle_google_callback(self, request: Request) -> Response:
+        """Step 2: Google redirects back here with auth code."""
+        import httpx
+
+        code = request.query_params.get("code")
+        google_state = request.query_params.get("state")
+
+        if not code or not google_state:
+            raise HTTPException(400, "Missing code or state from Google")
+
+        mcp_state = self.google_state_mapping.pop(google_state, None)
+        if not mcp_state or mcp_state not in self.state_mapping:
+            raise HTTPException(400, "Expired or invalid state")
+
+        # Exchange code for tokens
+        async with httpx.AsyncClient() as client:
+            token_resp = await client.post(GOOGLE_TOKEN_URL, data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            })
+            if token_resp.status_code != 200:
+                raise HTTPException(502, "Google token exchange failed")
+            token_data = token_resp.json()
+
+            userinfo_resp = await client.get(
+                GOOGLE_USERINFO_URL,
+                headers={"Authorization": f"Bearer {token_data['access_token']}"},
+            )
+            if userinfo_resp.status_code != 200:
+                raise HTTPException(502, "Google userinfo fetch failed")
+            userinfo = userinfo_resp.json()
+
+        google_sub = userinfo["sub"]
+        google_email = userinfo.get("email", "")
+        refresh_token = token_data.get("refresh_token", "")
+
+        # Find user by google_sub or email
+        with _get_users_conn() as conn:
+            row = conn.execute(
+                "SELECT username FROM users WHERE google_sub = ? OR google_email = ?",
+                (google_sub, google_email),
+            ).fetchone()
+
+        if row:
+            # Known user — update tokens and complete MCP flow
+            with _get_users_conn() as conn:
+                conn.execute(
+                    """UPDATE users SET google_sub = ?, google_email = ?, google_refresh_token = ?
+                       WHERE username = ?""",
+                    (google_sub, google_email, refresh_token or None, row["username"]),
+                )
+                conn.commit()
+            return self._complete_mcp_flow(mcp_state, row["username"])
+
+        # Unknown Google account — ask user to link to existing account
+        link_token = secrets.token_hex(16)
+        self.pending_links[link_token] = {
+            "google_sub": google_sub,
+            "google_email": google_email,
+            "refresh_token": refresh_token,
+            "mcp_state": mcp_state,
+        }
+        return HTMLResponse(self._link_page_html(link_token, google_email))
+
+    async def handle_link_callback(self, request: Request) -> Response:
+        """User enters username/password to link their existing account to Google."""
+        form = await request.form()
+        link_token = str(form.get("link_token", ""))
+        username = str(form.get("username", ""))
+        password = str(form.get("password", ""))
+
+        pending = self.pending_links.get(link_token)
+        if not pending:
+            raise HTTPException(400, "Expired link session — please try again")
+
+        if not self._check_credentials(username, password):
+            return HTMLResponse(
+                self._link_page_html(link_token, pending["google_email"], error=True),
+                status_code=401,
+            )
+
+        # Link Google account to this user
+        with _get_users_conn() as conn:
+            conn.execute(
+                """UPDATE users SET google_sub = ?, google_email = ?, google_refresh_token = ?
+                   WHERE username = ?""",
+                (pending["google_sub"], pending["google_email"], pending["refresh_token"] or None, username),
+            )
+            conn.commit()
+
+        del self.pending_links[link_token]
+        logger.info("google_account_linked", extra={"username": username, "google_email": pending["google_email"]})
+        return self._complete_mcp_flow(pending["mcp_state"], username)
+
+    def _complete_mcp_flow(self, mcp_state: str, username: str) -> Response:
+        """Issue MCP auth code and redirect back to MCP client."""
+        state_data = self.state_mapping.get(mcp_state)
+        if not state_data:
+            raise HTTPException(400, "MCP state expired")
+
+        redirect_uri = state_data["redirect_uri"]
+        code_challenge = state_data["code_challenge"]
+        redirect_uri_provided_explicitly = state_data["redirect_uri_provided_explicitly"] == "True"
+        client_id = state_data["client_id"]
+        resource = state_data.get("resource")
+
+        code_str = f"code_{secrets.token_hex(16)}"
+        auth_code = AuthorizationCode(
+            code=code_str,
+            client_id=client_id,
+            redirect_uri=AnyHttpUrl(redirect_uri),
+            redirect_uri_provided_explicitly=redirect_uri_provided_explicitly,
+            expires_at=time.time() + 300,
+            scopes=[MCP_SCOPE],
+            code_challenge=code_challenge,
+            resource=resource,
+        )
+        auth_code._username = username  # type: ignore[attr-defined]
+        self.auth_codes[code_str] = auth_code
+        del self.state_mapping[mcp_state]
+
+        redirect = construct_redirect_uri(redirect_uri, code=code_str, state=mcp_state)
+        return RedirectResponse(url=redirect, status_code=302)
+
     # ── Login flow ──
 
     def login_page_html(self, state: str, error: bool = False) -> str:
         error_html = '<p class="error">Invalid username or password.</p>' if error else ""
+        google_btn = ""
+        if GOOGLE_CLIENT_ID:
+            google_btn = f"""
+  <div class="divider"><span>or</span></div>
+  <a href="{self.base_url}/google/authorize?mcp_state={state}" class="google-btn">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Continue with Google
+  </a>"""
         return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -246,6 +431,15 @@ class EnvelOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
     }}
     button:hover {{ background: #15803d; }}
     .error {{ color: #dc2626; font-size: 13px; margin-top: -12px; margin-bottom: 12px; }}
+    .divider {{ display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #999; font-size: 13px; }}
+    .divider::before, .divider::after {{ content: ""; flex: 1; height: 1px; background: #e5e7eb; }}
+    .google-btn {{
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 11px; background: #fff; color: #374151;
+      border: 1px solid #d1d5db; border-radius: 6px; font-size: 15px;
+      text-decoration: none; box-sizing: border-box;
+    }}
+    .google-btn:hover {{ background: #f9fafb; }}
   </style>
 </head>
 <body>
@@ -259,6 +453,49 @@ class EnvelOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
     <input type="password" name="password" required>
     {error_html}
     <button type="submit">Sign In</button>
+  </form>
+  {google_btn}
+</body>
+</html>"""
+
+    def _link_page_html(self, link_token: str, google_email: str, error: bool = False) -> str:
+        error_html = '<p class="error">Invalid username or password.</p>' if error else ""
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>Finance MCP — Link Account</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {{ font-family: system-ui, sans-serif; max-width: 400px; margin: 80px auto; padding: 0 20px; }}
+    h2 {{ margin-bottom: 4px; }}
+    p.sub {{ color: #666; margin-top: 0; margin-bottom: 8px; font-size: 14px; }}
+    .email {{ font-weight: 600; color: #111; margin-bottom: 24px; font-size: 14px; }}
+    label {{ display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }}
+    input[type=text], input[type=password] {{
+      width: 100%; padding: 10px; margin-bottom: 16px;
+      border: 1px solid #ccc; border-radius: 6px; font-size: 15px; box-sizing: border-box;
+    }}
+    button {{
+      width: 100%; padding: 11px; background: #16a34a; color: #fff;
+      border: none; border-radius: 6px; font-size: 15px; cursor: pointer;
+    }}
+    button:hover {{ background: #15803d; }}
+    .error {{ color: #dc2626; font-size: 13px; margin-top: -12px; margin-bottom: 12px; }}
+  </style>
+</head>
+<body>
+  <h2>Link your account</h2>
+  <p class="sub">Signed in with Google as:</p>
+  <p class="email">{google_email}</p>
+  <p class="sub">Enter your existing credentials to link this Google account.</p>
+  <form method="post" action="{self.base_url}/link/callback">
+    <input type="hidden" name="link_token" value="{link_token}">
+    <label>Username</label>
+    <input type="text" name="username" autofocus required>
+    <label>Password</label>
+    <input type="password" name="password" required>
+    {error_html}
+    <button type="submit">Link &amp; Sign In</button>
   </form>
 </body>
 </html>"""
@@ -415,6 +652,9 @@ def create_app() -> Starlette:
         Route("/.well-known/openid-configuration", endpoint=openid_config, methods=["GET"]),
         Route("/login", endpoint=provider.handle_login, methods=["GET"]),
         Route("/login/callback", endpoint=provider.handle_login_callback, methods=["POST"]),
+        Route("/google/authorize", endpoint=provider.handle_google_authorize, methods=["GET"]),
+        Route("/google/callback", endpoint=provider.handle_google_callback, methods=["GET"]),
+        Route("/link/callback", endpoint=provider.handle_link_callback, methods=["POST"]),
         Route(
             "/introspect",
             endpoint=cors_middleware(make_introspect_handler(provider), ["POST", "OPTIONS"]),
