@@ -84,6 +84,13 @@ CREATE TABLE IF NOT EXISTS wishlist (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS user_memory (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    content    TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO user_memory (id, content) VALUES (1, '');
+
 -- Default envelope groups
 INSERT OR IGNORE INTO envelope_groups (id, name, sort_order) VALUES
     (1, 'Fixed Expenses',    1),
