@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
-import { formatIDR } from "@/lib/format"
 import {
   useEnvelopes,
   applyCover,
@@ -9,39 +8,30 @@ import {
   type EnvelopeGroupWithBudgets,
 } from "@/hooks/useEnvelopes"
 import { PeriodPicker, currentPeriod } from "@/components/shared/PeriodPicker"
-import { EnvelopeGroupCard } from "@/components/envelopes/EnvelopeGroupCard"
+import { PageHeader } from "@/components/shared/PageHeader"
+import { AmountText } from "@/components/shared/AmountText"
+import { EnvelopeGroupSection } from "@/components/envelopes/EnvelopeGroupSection"
 import { EnvelopeDetailDialog } from "@/components/envelopes/EnvelopeDetailDialog"
 
-export function EnvelopesPage({
-  showNominal,
-}: {
-  showNominal: boolean
-}) {
+export function EnvelopesPage({ showNominal }: { showNominal: boolean }) {
   const [period, setPeriod] = useState(currentPeriod)
   const { groups: initialGroups, allEnvelopes, isLoading } = useEnvelopes(period)
 
-  // Local budget overrides for cover actions
   const [overrides, setOverrides] = useState<Map<number, EnvelopeBudget>>(
     new Map()
   )
-
-  // Local target overrides
   const [targetOverrides, setTargetOverrides] = useState<
     Map<number, Envelope["target"]>
   >(new Map())
-
-  // Dialog state
   const [selectedEnvelopeId, setSelectedEnvelopeId] = useState<number | null>(
     null
   )
 
-  // Reset overrides when period changes
   const handlePeriodChange = useCallback((p: string) => {
     setPeriod(p)
     setOverrides(new Map())
   }, [])
 
-  // Merge initial budgets with overrides
   const groups: EnvelopeGroupWithBudgets[] = useMemo(() => {
     if (overrides.size === 0 && targetOverrides.size === 0) return initialGroups
     return initialGroups.map((g) => {
@@ -60,7 +50,6 @@ export function EnvelopesPage({
     })
   }, [initialGroups, overrides, targetOverrides])
 
-  // Flat list with current budgets
   const currentItems = useMemo(
     () =>
       allEnvelopes.map((item) => ({
@@ -80,8 +69,7 @@ export function EnvelopesPage({
   const donors = useMemo(
     () =>
       currentItems.filter(
-        (i) =>
-          i.budget.available > 0 && i.envelope.id !== selectedEnvelopeId
+        (i) => i.budget.available > 0 && i.envelope.id !== selectedEnvelopeId
       ),
     [currentItems, selectedEnvelopeId]
   )
@@ -113,49 +101,48 @@ export function EnvelopesPage({
     })
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <PeriodPicker period={period} onChange={handlePeriodChange} />
-        </div>
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex flex-col gap-4">
-      {/* Header: period + summary */}
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col overflow-hidden">
+      <PageHeader title="Envelopes">
         <PeriodPicker period={period} onChange={handlePeriodChange} />
-        <div className="text-right">
-          <p
-            className={`text-lg font-heading font-semibold tabular-nums ${
-              totalAvailable < 0
-                ? "text-red-600 dark:text-red-400"
-                : "text-foreground"
-            }`}
-          >
-            {showNominal ? formatIDR(totalAvailable) : "••••••"}
+      </PageHeader>
+
+      {/* Total available strip */}
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-card px-7 py-3">
+        <div>
+          <p className="mb-0.5 text-[11px] font-medium text-text-muted">
+            Total available
           </p>
-          <p className="text-[11px] text-muted-foreground">Total available</p>
+          <AmountText
+            amount={totalAvailable}
+            showNominal={showNominal}
+            size="xl"
+            tone={totalAvailable < 0 ? "auto" : "neutral"}
+          />
         </div>
       </div>
 
-      {/* Groups */}
-      {groups.map((g) => (
-        <EnvelopeGroupCard
-          key={g.group.id}
-          data={g}
-          showNominal={showNominal}
-          onEnvelopeClick={setSelectedEnvelopeId}
-        />
-      ))}
+      {/* Scrollable groups area */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="size-5 animate-spin text-text-muted" />
+          </div>
+        ) : (
+          <>
+            {groups.map((g) => (
+              <EnvelopeGroupSection
+                key={g.group.id}
+                data={g}
+                showNominal={showNominal}
+                onEnvelopeClick={setSelectedEnvelopeId}
+              />
+            ))}
+            <div className="h-10" />
+          </>
+        )}
+      </div>
 
-      {/* Detail dialog */}
       <EnvelopeDetailDialog
         envelope={selectedItem?.envelope ?? null}
         budget={selectedItem?.budget ?? null}

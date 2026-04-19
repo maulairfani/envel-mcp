@@ -13,8 +13,8 @@ import {
   PeriodPicker,
   currentPeriod,
 } from "@/components/shared/PeriodPicker"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { TransactionDayGroup } from "@/components/transactions/TransactionDayGroup"
-import { Card, CardContent } from "@/components/ui/card"
 
 const DEFAULT_FILTERS: FilterState = {
   type: "all",
@@ -23,11 +23,7 @@ const DEFAULT_FILTERS: FilterState = {
   envelope: "all",
 }
 
-export function TransactionsPage({
-  showNominal,
-}: {
-  showNominal: boolean
-}) {
+export function TransactionsPage({ showNominal }: { showNominal: boolean }) {
   const [period, setPeriod] = useState(currentPeriod)
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
 
@@ -42,41 +38,59 @@ export function TransactionsPage({
   const days = useMemo(() => groupByDay(filtered), [filtered])
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col overflow-hidden">
+      <PageHeader title="Transactions">
         <PeriodPicker period={period} onChange={setPeriod} />
-      </div>
-      <TransactionFilters
-        filters={filters}
-        onChange={setFilters}
-        accounts={accounts}
-        envelopes={envelopes}
-        resultCount={filtered.length}
-      />
+      </PageHeader>
 
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : days.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              No transactions found
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {days.map((group) => (
-                <TransactionDayGroup
-                  key={group.date}
-                  group={group}
-                  showNominal={showNominal}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Filter bar */}
+      <div className="flex-shrink-0 border-b border-border bg-card px-7 py-3">
+        <TransactionFilters
+          filters={filters}
+          onChange={setFilters}
+          accounts={accounts}
+          envelopes={envelopes}
+          resultCount={filtered.length}
+        />
+      </div>
+
+      {/* Column header strip */}
+      <div className="hidden flex-shrink-0 grid-cols-[28px_1fr_1fr_100px_80px_90px] gap-3 border-b border-border bg-bg-muted px-7 py-1.5 md:grid">
+        {["", "Payee", "Memo", "Envelope", "Account", "Amount"].map((h, i) => (
+          <span
+            key={i}
+            className={`text-[11px] font-semibold uppercase tracking-wider text-text-muted ${
+              i === 5 ? "text-right" : "text-left"
+            }`}
+          >
+            {h}
+          </span>
+        ))}
+      </div>
+
+      {/* Scrollable rows */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="size-5 animate-spin text-text-muted" />
+          </div>
+        ) : days.length === 0 ? (
+          <div className="flex items-center justify-center py-16 text-sm text-text-muted">
+            No transactions found
+          </div>
+        ) : (
+          <>
+            {days.map((group) => (
+              <TransactionDayGroup
+                key={group.date}
+                group={group}
+                showNominal={showNominal}
+              />
+            ))}
+            <div className="h-10" />
+          </>
+        )}
+      </div>
     </div>
   )
 }

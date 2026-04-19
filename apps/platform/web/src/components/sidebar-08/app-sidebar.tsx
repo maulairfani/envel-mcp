@@ -4,16 +4,14 @@ import {
   CreditCard,
   Heart,
   LayoutDashboard,
-  LifeBuoy,
   List,
-  Send,
   Settings,
   Wallet,
 } from "lucide-react"
 
 import { NavMain } from "@/components/sidebar-08/nav-main"
-import { NavSecondary } from "@/components/sidebar-08/nav-secondary"
 import { NavUser } from "@/components/sidebar-08/nav-user"
+import { LogoMark } from "@/components/shared/LogoMark"
 import { useAuth } from "@/hooks/useAuth"
 import {
   Sidebar,
@@ -27,40 +25,12 @@ import {
 
 const data = {
   navMain: [
-    {
-      title: "Envelopes",
-      url: "/envelopes",
-      icon: Wallet,
-    },
-    {
-      title: "Transactions",
-      url: "/transactions",
-      icon: List,
-    },
-    {
-      title: "Analytics",
-      url: "/analytics",
-      icon: LayoutDashboard,
-    },
-    {
-      title: "Accounts",
-      url: "/accounts",
-      icon: CreditCard,
-    },
-    {
-      title: "Wishlist",
-      url: "/wishlist",
-      icon: Heart,
-    },
-    {
-      title: "Settings",
-      url: "/settings",
-      icon: Settings,
-    },
-  ],
-  navSecondary: [
-    { title: "Support", url: "#", icon: LifeBuoy },
-    { title: "Feedback", url: "#", icon: Send },
+    { title: "Envelopes", url: "/envelopes", icon: Wallet },
+    { title: "Transactions", url: "/transactions", icon: List },
+    { title: "Analytics", url: "/analytics", icon: LayoutDashboard },
+    { title: "Accounts", url: "/accounts", icon: CreditCard },
+    { title: "Wishlist", url: "/wishlist", icon: Heart },
+    { title: "Settings", url: "/settings", icon: Settings },
   ],
 }
 
@@ -86,12 +56,14 @@ export function AppSidebar({ theme, setTheme, ...props }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link to="/" />}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <Wallet className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">Envel</span>
-                <span className="truncate text-xs">Envelope Budget</span>
+              <LogoMark size={30} />
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate font-heading text-sm font-bold text-text-primary">
+                  Envel
+                </span>
+                <span className="truncate text-[11px] text-text-muted">
+                  Envelope Budget
+                </span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -99,7 +71,6 @@ export function AppSidebar({ theme, setTheme, ...props }: AppSidebarProps) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} theme={theme} setTheme={setTheme} />

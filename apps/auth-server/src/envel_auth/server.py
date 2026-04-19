@@ -401,104 +401,237 @@ class EnvelOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Ref
 
     # ── Login flow ──
 
-    def login_page_html(self, state: str, error: bool = False) -> str:
-        error_html = '<p class="error">Invalid username or password.</p>' if error else ""
-        google_btn = ""
-        if GOOGLE_CLIENT_ID:
-            google_btn = f"""
-  <div class="divider"><span>or</span></div>
-  <a href="{self.base_url}/google/authorize?mcp_state={state}" class="google-btn">
-    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-    Continue with Google
-  </a>"""
+    def _auth_shell(self, title: str, body: str) -> str:
+        """Shared HTML shell for auth pages (Envel design system)."""
         return f"""<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Finance MCP — Sign In</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body {{ font-family: system-ui, sans-serif; max-width: 400px; margin: 80px auto; padding: 0 20px; }}
-    h2 {{ margin-bottom: 4px; }}
-    p.sub {{ color: #666; margin-top: 0; margin-bottom: 24px; font-size: 14px; }}
-    label {{ display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }}
+    :root {{
+      --brand: oklch(50% 0.16 145);
+      --brand-hover: oklch(44% 0.16 145);
+      --brand-light: oklch(94% 0.06 145);
+      --brand-text: oklch(36% 0.13 145);
+
+      --bg: oklch(97% 0.012 75);
+      --bg-surface: oklch(99.5% 0.008 75);
+      --bg-elevated: oklch(100% 0 0);
+      --bg-muted: oklch(94% 0.014 75);
+
+      --text-primary: oklch(18% 0.018 65);
+      --text-secondary: oklch(46% 0.015 65);
+      --text-muted: oklch(62% 0.012 65);
+      --text-placeholder: oklch(74% 0.01 65);
+
+      --border: oklch(90% 0.012 75);
+      --border-muted: oklch(93% 0.01 75);
+
+      --danger: oklch(52% 0.19 25);
+      --danger-light: oklch(95% 0.06 25);
+
+      --shadow-md: 0 4px 16px oklch(0% 0 0 / 0.1), 0 0 0 1px oklch(0% 0 0 / 0.04);
+      --font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --bg: oklch(12% 0.015 55);
+        --bg-surface: oklch(15.5% 0.018 55);
+        --bg-elevated: oklch(18.5% 0.02 55);
+        --bg-muted: oklch(20% 0.018 55);
+        --brand-light: oklch(22% 0.08 145);
+        --brand-text: oklch(72% 0.14 145);
+        --text-primary: oklch(93% 0.01 75);
+        --text-secondary: oklch(68% 0.012 70);
+        --text-muted: oklch(52% 0.01 65);
+        --text-placeholder: oklch(42% 0.01 65);
+        --border: oklch(24% 0.018 55);
+        --border-muted: oklch(21% 0.015 55);
+        --danger: oklch(62% 0.19 25);
+        --danger-light: oklch(26% 0.08 25);
+        --shadow-md: 0 4px 16px oklch(0% 0 0 / 0.35), 0 0 0 1px oklch(100% 0 0 / 0.04);
+      }}
+    }}
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; }}
+    body {{
+      font-family: var(--font);
+      color: var(--text-primary);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      font-size: 14px;
+    }}
+    .auth-wrap {{ width: 380px; max-width: 100%; display: flex; flex-direction: column; align-items: center; }}
+    .auth-head {{ margin-bottom: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }}
+    .logo-mark {{
+      width: 52px; height: 52px; border-radius: 16px;
+      background: var(--brand);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px oklch(50% 0.16 145 / 0.35);
+    }}
+    .auth-title {{ text-align: center; }}
+    .auth-title h1 {{ font-weight: 800; font-size: 22px; color: var(--text-primary); line-height: 1.2; }}
+    .auth-title p {{ font-size: 13.5px; color: var(--text-muted); margin-top: 4px; }}
+    .auth-card {{
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px 28px 24px;
+      box-shadow: var(--shadow-md);
+    }}
+    form {{ display: flex; flex-direction: column; gap: 16px; }}
+    label {{ display: block; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }}
     input[type=text], input[type=password] {{
-      width: 100%; padding: 10px; margin-bottom: 16px;
-      border: 1px solid #ccc; border-radius: 6px; font-size: 15px; box-sizing: border-box;
+      width: 100%; padding: 10px 14px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--text-primary);
+      transition: border-color 120ms;
     }}
-    button {{
-      width: 100%; padding: 11px; background: #16a34a; color: #fff;
-      border: none; border-radius: 6px; font-size: 15px; cursor: pointer;
+    input::placeholder {{ color: var(--text-placeholder); }}
+    input:focus {{ outline: none; border-color: var(--brand); }}
+    .email-pill {{
+      font-weight: 600; color: var(--text-primary); font-size: 14px;
+      padding: 8px 14px; background: var(--bg-muted); border-radius: 10px;
+      word-break: break-all;
     }}
-    button:hover {{ background: #15803d; }}
-    .error {{ color: #dc2626; font-size: 13px; margin-top: -12px; margin-bottom: 12px; }}
-    .divider {{ display: flex; align-items: center; gap: 10px; margin: 16px 0; color: #999; font-size: 13px; }}
-    .divider::before, .divider::after {{ content: ""; flex: 1; height: 1px; background: #e5e7eb; }}
+    .btn-primary {{
+      margin-top: 4px; padding: 11px; border-radius: 10px;
+      background: var(--brand); color: #fff;
+      font-family: var(--font); font-size: 14.5px; font-weight: 700;
+      border: none; cursor: pointer;
+      transition: background 120ms, box-shadow 120ms;
+      box-shadow: 0 2px 8px oklch(50% 0.16 145 / 0.3);
+    }}
+    .btn-primary:hover {{ background: var(--brand-hover); }}
+    .error {{
+      font-size: 12.5px; font-weight: 500; color: var(--danger);
+      background: var(--danger-light); padding: 8px 12px; border-radius: 8px;
+    }}
+    .divider {{
+      display: flex; align-items: center; gap: 10px;
+      margin: 4px 0;
+      color: var(--text-muted); font-size: 12px; font-weight: 500;
+    }}
+    .divider::before, .divider::after {{
+      content: ""; flex: 1; height: 1px; background: var(--border);
+    }}
     .google-btn {{
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 11px; background: #fff; color: #374151;
-      border: 1px solid #d1d5db; border-radius: 6px; font-size: 15px;
-      text-decoration: none; box-sizing: border-box;
+      width: 100%; padding: 10px 14px;
+      background: var(--bg-elevated);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-family: var(--font); font-size: 14px; font-weight: 600;
+      text-decoration: none;
+      transition: background 120ms, border-color 120ms;
+      cursor: pointer;
     }}
-    .google-btn:hover {{ background: #f9fafb; }}
+    .google-btn:hover {{ background: var(--bg-muted); border-color: var(--text-muted); }}
+    .context-note {{
+      font-size: 12.5px; color: var(--text-muted);
+      text-align: center; margin-bottom: 8px;
+    }}
   </style>
 </head>
 <body>
-  <h2>Finance MCP</h2>
-  <p class="sub">Sign in to access your financial data.</p>
-  <form method="post" action="{self.base_url}/login/callback">
-    <input type="hidden" name="state" value="{state}">
-    <label>Username</label>
-    <input type="text" name="username" autofocus required>
-    <label>Password</label>
-    <input type="password" name="password" required>
-    {error_html}
-    <button type="submit">Sign In</button>
-  </form>
-  {google_btn}
+  {body}
 </body>
 </html>"""
 
+    def _logo_mark_svg(self) -> str:
+        """Envelope mark matching platform LogoMark (Option C)."""
+        return (
+            '<svg width="32" height="32" viewBox="0 0 48 48" fill="none" aria-hidden="true">'
+            '<rect x="8" y="16" width="32" height="22" rx="4" fill="white" fill-opacity="0.2"/>'
+            '<path d="M8 20 L24 30 L40 20 L40 16 Q40 12 36 12 L12 12 Q8 12 8 16 Z" fill="white" fill-opacity="0.95"/>'
+            '<path d="M8 34 L16 26 M40 34 L32 26" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>'
+            '</svg>'
+        )
+
+    def login_page_html(self, state: str, error: bool = False) -> str:
+        error_html = '<p class="error">Invalid username or password.</p>' if error else ""
+        google_section = ""
+        if GOOGLE_CLIENT_ID:
+            google_section = f"""
+        <div class="divider"><span>or</span></div>
+        <a href="{self.base_url}/google/authorize?mcp_state={state}" class="google-btn">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          Continue with Google
+        </a>"""
+
+        body = f"""
+  <main class="auth-wrap">
+    <div class="auth-head">
+      <div class="logo-mark">{self._logo_mark_svg()}</div>
+      <div class="auth-title">
+        <h1>Welcome back</h1>
+        <p>Sign in to your Envel account</p>
+      </div>
+    </div>
+    <div class="auth-card">
+      <form method="post" action="{self.base_url}/login/callback">
+        <input type="hidden" name="state" value="{state}">
+        <div>
+          <label for="username">Username</label>
+          <input id="username" type="text" name="username" autofocus required autocomplete="username" placeholder="Your username">
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input id="password" type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+        {error_html}
+        <button type="submit" class="btn-primary">Sign in</button>
+        {google_section}
+      </form>
+    </div>
+  </main>"""
+        return self._auth_shell("Envel — Sign In", body)
+
     def _link_page_html(self, link_token: str, google_email: str, error: bool = False) -> str:
         error_html = '<p class="error">Invalid username or password.</p>' if error else ""
-        return f"""<!DOCTYPE html>
-<html>
-<head>
-  <title>Finance MCP — Link Account</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {{ font-family: system-ui, sans-serif; max-width: 400px; margin: 80px auto; padding: 0 20px; }}
-    h2 {{ margin-bottom: 4px; }}
-    p.sub {{ color: #666; margin-top: 0; margin-bottom: 8px; font-size: 14px; }}
-    .email {{ font-weight: 600; color: #111; margin-bottom: 24px; font-size: 14px; }}
-    label {{ display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }}
-    input[type=text], input[type=password] {{
-      width: 100%; padding: 10px; margin-bottom: 16px;
-      border: 1px solid #ccc; border-radius: 6px; font-size: 15px; box-sizing: border-box;
-    }}
-    button {{
-      width: 100%; padding: 11px; background: #16a34a; color: #fff;
-      border: none; border-radius: 6px; font-size: 15px; cursor: pointer;
-    }}
-    button:hover {{ background: #15803d; }}
-    .error {{ color: #dc2626; font-size: 13px; margin-top: -12px; margin-bottom: 12px; }}
-  </style>
-</head>
-<body>
-  <h2>Link your account</h2>
-  <p class="sub">Signed in with Google as:</p>
-  <p class="email">{google_email}</p>
-  <p class="sub">Enter your existing credentials to link this Google account.</p>
-  <form method="post" action="{self.base_url}/link/callback">
-    <input type="hidden" name="link_token" value="{link_token}">
-    <label>Username</label>
-    <input type="text" name="username" autofocus required>
-    <label>Password</label>
-    <input type="password" name="password" required>
-    {error_html}
-    <button type="submit">Link &amp; Sign In</button>
-  </form>
-</body>
-</html>"""
+        # Escape email for safety (very basic — just for display)
+        safe_email = google_email.replace("<", "&lt;").replace(">", "&gt;")
+        body = f"""
+  <main class="auth-wrap">
+    <div class="auth-head">
+      <div class="logo-mark">{self._logo_mark_svg()}</div>
+      <div class="auth-title">
+        <h1>Link your account</h1>
+        <p>Signed in with Google as</p>
+      </div>
+    </div>
+    <div class="auth-card">
+      <div class="email-pill" style="margin-bottom:18px;">{safe_email}</div>
+      <p class="context-note">Enter your existing Envel credentials to link this Google account.</p>
+      <form method="post" action="{self.base_url}/link/callback">
+        <input type="hidden" name="link_token" value="{link_token}">
+        <div>
+          <label for="username">Username</label>
+          <input id="username" type="text" name="username" autofocus required autocomplete="username" placeholder="Your username">
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input id="password" type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+        {error_html}
+        <button type="submit" class="btn-primary">Link &amp; Sign in</button>
+      </form>
+    </div>
+  </main>"""
+        return self._auth_shell("Envel — Link Account", body)
 
     async def handle_login(self, request: Request) -> Response:
         state = request.query_params.get("state")

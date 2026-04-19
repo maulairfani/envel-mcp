@@ -1,7 +1,4 @@
-import { useState } from "react"
-import { ChevronDown } from "lucide-react"
-import { formatIDR } from "@/lib/format"
-import { Card } from "@/components/ui/card"
+import { AmountText } from "@/components/shared/AmountText"
 import type { AccountTypeGroup as AccountTypeGroupData } from "@/hooks/useAccounts"
 import { AccountRow } from "./AccountRow"
 
@@ -16,42 +13,28 @@ export function AccountTypeGroup({
   showNominal,
   onAccountClick,
 }: AccountTypeGroupProps) {
-  const [open, setOpen] = useState(true)
-
   return (
-    <Card className="gap-0 py-0 overflow-hidden">
-      {/* Group header */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 w-full px-4 py-3 text-left transition-colors hover:bg-muted/50"
-      >
-        <ChevronDown
-          className={`size-4 text-muted-foreground transition-transform ${
-            open ? "" : "-rotate-90"
-          }`}
-        />
-        <span className="flex-1 text-[13px] font-heading font-semibold">
+    <div>
+      <div className="flex items-center justify-between border-t border-border bg-bg-muted px-7 py-2.5">
+        <span className="font-heading text-xs font-bold uppercase tracking-wider text-text-secondary">
           {data.label}
         </span>
+        <AmountText
+          amount={data.totalBalance}
+          showNominal={showNominal}
+          size="sm"
+          tone="neutral"
+        />
+      </div>
 
-        <span className="shrink-0 text-right text-[12px] font-semibold tabular-nums text-foreground">
-          {showNominal ? formatIDR(data.totalBalance) : "•••••"}
-        </span>
-      </button>
-
-      {/* Account rows */}
-      {open && (
-        <div className="border-t border-border">
-          {data.accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              showNominal={showNominal}
-              onClick={() => onAccountClick(account.id)}
-            />
-          ))}
-        </div>
-      )}
-    </Card>
+      {data.accounts.map((account) => (
+        <AccountRow
+          key={account.id}
+          account={account}
+          showNominal={showNominal}
+          onClick={() => onAccountClick(account.id)}
+        />
+      ))}
+    </div>
   )
 }

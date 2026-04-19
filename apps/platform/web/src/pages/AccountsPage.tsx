@@ -1,77 +1,68 @@
 import { useMemo, useState } from "react"
-import { Loader2, Wallet } from "lucide-react"
-import { formatIDR } from "@/lib/format"
+import { Loader2 } from "lucide-react"
 import { useAccounts } from "@/hooks/useAccounts"
+import { PageHeader } from "@/components/shared/PageHeader"
+import { AmountText } from "@/components/shared/AmountText"
 import { AccountTypeGroup } from "@/components/accounts/AccountTypeGroup"
 import { AccountDetailDialog } from "@/components/accounts/AccountDetailDialog"
 
-export function AccountsPage({
-  showNominal,
-}: {
-  showNominal: boolean
-}) {
+export function AccountsPage({ showNominal }: { showNominal: boolean }) {
   const { accounts, groups, totalBalance, isLoading } = useAccounts()
-
-  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
-    null
-  )
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
 
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === selectedAccountId) ?? null,
     [accounts, selectedAccountId]
   )
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
+  const accountCount = accounts.length
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Header: net worth summary */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Wallet className="size-4" />
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground">Net worth</p>
-            <p
-              className={`text-lg font-heading font-semibold tabular-nums ${
-                totalBalance < 0
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-foreground"
-              }`}
-            >
-              {showNominal ? formatIDR(totalBalance) : "••••••"}
-            </p>
-          </div>
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {accounts.length} account{accounts.length !== 1 ? "s" : ""}
-        </p>
+    <div className="flex h-full flex-col overflow-hidden">
+      <PageHeader
+        title="Accounts"
+        right={
+          <span className="text-xs font-medium text-text-muted">
+            {accountCount} account{accountCount !== 1 ? "s" : ""}
+          </span>
+        }
+      />
+
+      {/* Net worth strip */}
+      <div className="flex-shrink-0 border-b border-border bg-card px-7 py-4">
+        <p className="mb-1 text-[11.5px] font-medium text-text-muted">Net worth</p>
+        <AmountText
+          amount={totalBalance}
+          showNominal={showNominal}
+          size="2xl"
+          tone={totalBalance < 0 ? "auto" : "neutral"}
+        />
       </div>
 
-      {/* Account groups by type */}
-      {groups.map((g) => (
-        <AccountTypeGroup
-          key={g.type}
-          data={g}
-          showNominal={showNominal}
-          onAccountClick={setSelectedAccountId}
-        />
-      ))}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="size-5 animate-spin text-text-muted" />
+          </div>
+        ) : accountCount === 0 ? (
+          <div className="flex items-center justify-center py-16 text-sm text-text-muted">
+            No accounts yet
+          </div>
+        ) : (
+          <>
+            {groups.map((g) => (
+              <AccountTypeGroup
+                key={g.type}
+                data={g}
+                showNominal={showNominal}
+                onAccountClick={setSelectedAccountId}
+              />
+            ))}
+            <div className="h-10" />
+          </>
+        )}
+      </div>
 
-      {accounts.length === 0 && (
-        <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-          No accounts yet
-        </div>
-      )}
-
-      {/* Detail dialog */}
       <AccountDetailDialog
         account={selectedAccount}
         open={selectedAccountId !== null}

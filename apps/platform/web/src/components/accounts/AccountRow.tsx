@@ -1,4 +1,4 @@
-import { formatIDR } from "@/lib/format"
+import { AmountText } from "@/components/shared/AmountText"
 import type { Account } from "@/hooks/useAccounts"
 
 const TYPE_LABELS: Record<string, string> = {
@@ -23,33 +23,25 @@ export function AccountRow({ account, showNominal, onClick }: AccountRowProps) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 px-4 py-3 w-full text-left transition-colors hover:bg-muted/50 cursor-pointer"
+      className="flex w-full items-center gap-3.5 border-b border-border-muted px-7 py-3 text-left transition-colors hover:bg-bg-muted"
     >
-      {/* Icon */}
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted/60 text-lg leading-none">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-bg-muted text-lg leading-none">
         {TYPE_ICONS[account.type] ?? "💰"}
       </div>
-
-      {/* Name + type */}
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-medium truncate">{account.name}</p>
-        <p className="text-[11px] text-muted-foreground">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-text-primary">
+          {account.name}
+        </p>
+        <p className="mt-0.5 text-[11.5px] text-text-muted">
           {TYPE_LABELS[account.type]}
         </p>
       </div>
-
-      {/* Balance */}
-      <div className="shrink-0 text-right">
-        <p
-          className={`text-[13px] font-medium tabular-nums ${
-            account.balance < 0
-              ? "text-red-600 dark:text-red-400"
-              : "text-foreground"
-          }`}
-        >
-          {showNominal ? formatIDR(account.balance) : "•••••"}
-        </p>
-      </div>
+      <AmountText
+        amount={account.balance}
+        showNominal={showNominal}
+        size="md"
+        tone={account.balance < 0 ? "auto" : "neutral"}
+      />
     </button>
   )
 }

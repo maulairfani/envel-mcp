@@ -1,5 +1,4 @@
 import { Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
 import type { WishlistFilter, WishlistSort } from "@/hooks/useWishlist"
 
 interface WishlistFiltersProps {
@@ -25,6 +24,30 @@ const SORT_OPTIONS: { value: WishlistSort; label: string }[] = [
   { value: "price_low", label: "Price ↑" },
 ]
 
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        active
+          ? "inline-flex items-center rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white transition-all"
+          : "inline-flex items-center rounded-full bg-bg-muted px-3 py-1 text-xs font-semibold text-text-secondary transition-all hover:brightness-95"
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
 export function WishlistFilters({
   filter,
   sort,
@@ -35,47 +58,43 @@ export function WishlistFilters({
   resultCount,
 }: WishlistFiltersProps) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2">
-        {/* Status filter */}
-        <select
-          value={filter}
-          onChange={(e) => onFilterChange(e.target.value as WishlistFilter)}
-          className="h-8 rounded-lg border border-input bg-background px-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-        >
-          {FILTER_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Sort */}
-        <select
-          value={sort}
-          onChange={(e) => onSortChange(e.target.value as WishlistSort)}
-          className="h-8 rounded-lg border border-input bg-background px-2 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-        >
-          {SORT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        <span className="text-[11px] text-muted-foreground hidden sm:inline">
-          {resultCount} item{resultCount !== 1 ? "s" : ""}
-        </span>
+    <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex gap-1.5">
+        {FILTER_OPTIONS.map((opt) => (
+          <Chip
+            key={opt.value}
+            active={filter === opt.value}
+            onClick={() => onFilterChange(opt.value)}
+          >
+            {opt.label}
+          </Chip>
+        ))}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
+      <select
+        value={sort}
+        onChange={(e) => onSortChange(e.target.value as WishlistSort)}
+        className="h-7 rounded-md border border-border bg-bg px-2 text-xs font-semibold text-text-secondary focus:border-brand focus:outline-none"
+      >
+        {SORT_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+
+      <span className="text-xs font-medium text-text-muted">
+        {resultCount} item{resultCount !== 1 ? "s" : ""}
+      </span>
+
+      <div className="relative ml-auto w-56 max-w-full">
+        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-text-muted" />
+        <input
+          type="text"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search wishlist…"
-          className="h-8 pl-8 text-[13px] w-full sm:w-48"
+          className="h-8 w-full rounded-md border border-border bg-bg pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-placeholder focus:border-brand focus:outline-none"
         />
       </div>
     </div>
