@@ -5,6 +5,8 @@ import {
   filterTransactions,
   groupByDay,
 } from "@/hooks/useTransactions"
+import { useAccounts } from "@/hooks/useAccounts"
+import { useEnvelopes } from "@/hooks/useEnvelopes"
 import {
   TransactionFilters,
   type FilterState,
@@ -27,8 +29,18 @@ export function TransactionsPage({ showNominal }: { showNominal: boolean }) {
   const [period, setPeriod] = useState(currentPeriod)
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
 
-  const { transactions, accounts, envelopes, isLoading } =
-    useTransactions(period)
+  const { transactions, isLoading } = useTransactions(period)
+  const { accounts: allAccounts } = useAccounts()
+  const { allEnvelopes } = useEnvelopes(period)
+
+  const accounts = useMemo(
+    () => allAccounts.map((a) => a.name).sort(),
+    [allAccounts]
+  )
+  const envelopes = useMemo(
+    () => allEnvelopes.map((e) => e.envelope.name).sort(),
+    [allEnvelopes]
+  )
 
   const filtered = useMemo(
     () => filterTransactions(transactions, filters),

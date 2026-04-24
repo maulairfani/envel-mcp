@@ -200,7 +200,8 @@ def get_transactions(
         SELECT
             t.id, t.date, t.type, t.amount, t.payee, t.memo,
             a.name AS account_name,
-            e.name AS envelope_name
+            e.name AS envelope_name,
+            e.icon AS envelope_icon
         FROM transactions t
         LEFT JOIN accounts a ON t.account_id = a.id
         LEFT JOIN envelopes e ON t.envelope_id = e.id

@@ -1,15 +1,6 @@
 import { AmountText } from "@/components/shared/AmountText"
 import type { Transaction } from "@/hooks/useTransactions"
 
-/** Envelope → emoji (mirrors schema.sql defaults) */
-const ENVELOPE_ICONS: Record<string, string> = {
-  Salary: "💼", Freelance: "💻", Investments: "📈", "Other Income": "💰",
-  Rent: "🏡", Bills: "📄", Subscriptions: "🔄", "Family Support": "🏠",
-  Food: "🍽️", Transport: "🚗", Shopping: "🛍️", Entertainment: "🎮",
-  Health: "🏥", Education: "📚", "Emergency Fund": "🛡️",
-  Savings: "💎", Miscellaneous: "💸",
-}
-
 const TYPE_FALLBACK: Record<string, string> = {
   expense: "💸",
   income: "💰",
@@ -38,8 +29,8 @@ interface TransactionRowProps {
 
 export function TransactionRow({ transaction, showNominal }: TransactionRowProps) {
   const icon =
-    transaction.type === "expense" && transaction.envelope
-      ? ENVELOPE_ICONS[transaction.envelope] ?? TYPE_FALLBACK[transaction.type]
+    transaction.type !== "transfer" && transaction.envelopeIcon
+      ? transaction.envelopeIcon
       : TYPE_FALLBACK[transaction.type]
 
   const payee =

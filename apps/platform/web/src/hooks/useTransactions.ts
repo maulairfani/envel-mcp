@@ -8,6 +8,7 @@ export interface Transaction {
   amount: number
   type: TransactionType
   envelope: string | null
+  envelopeIcon: string | null
   account: string
   toAccount: string | null
   payee: string | null
@@ -33,6 +34,7 @@ interface TransactionRow {
   memo: string | null
   account_name: string | null
   envelope_name: string | null
+  envelope_icon: string | null
 }
 
 function transformRow(r: TransactionRow): Transaction {
@@ -41,6 +43,7 @@ function transformRow(r: TransactionRow): Transaction {
     amount: r.amount,
     type: r.type,
     envelope: r.envelope_name,
+    envelopeIcon: r.envelope_icon,
     account: r.account_name ?? "—",
     toAccount: null,
     payee: r.payee,
@@ -122,11 +125,5 @@ export function useTransactions(period?: string) {
 
   const transactions = (data ?? []).map(transformRow)
 
-  // Derive unique accounts and envelopes for filter dropdowns
-  const accounts = [...new Set(transactions.map((t) => t.account))].sort()
-  const envelopes = [
-    ...new Set(transactions.map((t) => t.envelope).filter(Boolean) as string[]),
-  ].sort()
-
-  return { transactions, accounts, envelopes, isLoading, error }
+  return { transactions, isLoading, error }
 }
