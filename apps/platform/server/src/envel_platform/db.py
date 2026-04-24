@@ -287,8 +287,8 @@ def get_wishlist(username: str, status: str | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_daily_expenses(username: str, days: int = 30) -> list[dict]:
-    """Return daily expense rows for the last N days, grouped by date + envelope."""
+def get_daily_expenses(username: str, period: str) -> list[dict]:
+    """Return daily expense rows for a YYYY-MM period, grouped by date + envelope."""
     sql = """
         SELECT
             date(t.date) AS day,
@@ -298,12 +298,12 @@ def get_daily_expenses(username: str, days: int = 30) -> list[dict]:
         FROM transactions t
         LEFT JOIN envelopes e ON t.envelope_id = e.id
         WHERE t.type = 'expense'
-          AND date(t.date) >= date('now', ?)
+          AND strftime('%Y-%m', t.date) = ?
         GROUP BY day, e.id
         ORDER BY day
     """
     with get_conn(username) as conn:
-        rows = conn.execute(sql, (f"-{days} days",)).fetchall()
+        rows = conn.execute(sql, (period,)).fetchall()
     return [dict(r) for r in rows]
 
 

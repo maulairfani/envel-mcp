@@ -10,9 +10,20 @@ import {
 } from "recharts"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { AmountText } from "@/components/shared/AmountText"
+import { PeriodPicker, currentPeriod } from "@/components/shared/PeriodPicker"
 import { useDailyExpenses } from "@/hooks/useAnalytics"
 import { formatIDRShort } from "@/lib/format"
 import { CHART_COLORS } from "@/lib/chart-colors"
+
+const MONTHS_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+]
+
+function periodLabel(period: string): string {
+  const [y, m] = period.split("-").map(Number)
+  return `${MONTHS_LONG[m - 1]} ${y}`
+}
 
 interface TooltipPayloadEntry {
   name: string
@@ -55,45 +66,45 @@ function ChartTooltip({
 }
 
 export function DashboardPage({ showNominal }: { showNominal: boolean }) {
-  const { data, loading, error } = useDailyExpenses(30)
-  const [excluded, setExcluded] = useState<Set<number>>(new Set())
+  const [period, setPeriod] = useState(currentPeriod)
+  const { data, loading, error } = useDailyExpenses(period)
+  // null = all visible (default). Set = only those envelope IDs are visible.
+  const [selected, setSelected] = useState<Set<number> | null>(null)
 
-  const totalExpenses30d = useMemo(() => {
+  const isVisible = (id: number) => selected === null || selected.has(id)
+
+  const totalPeriodExpenses = useMemo(() => {
     if (!data) return 0
-    return data.chartData.reduce((sum, day) => sum + day.total, 0)
-  }, [data])
+    if (selected === null) {
+      return data.chartData.reduce((sum, day) => sum + day.total, 0)
+    }
+    return data.chartData.reduce((sum, day) => {
+      for (const env of data.envelopes) {
+        if (selected.has(env.id)) sum += (day[env.name] as number) ?? 0
+      }
+      return sum
+    }, 0)
+  }, [data, selected])
 
-  // Per-envelope totals across 30 days (for breakdown section)
-  const envelopeTotals = useMemo(() => {
-    if (!data) return []
-    return data.envelopes
-      .map((env) => {
-        const total = data.chartData.reduce(
-          (s, d) => s + ((d[env.name] as number | undefined) ?? 0),
-          0
-        )
-        return { id: env.id, name: env.name, total }
-      })
-      .sort((a, b) => b.total - a.total)
-  }, [data])
-
-  const maxEnvTotal = Math.max(1, ...envelopeTotals.map((e) => e.total))
-
-  const visibleEnvelopes = data?.envelopes.filter((e) => !excluded.has(e.id)) ?? []
+  const visibleEnvelopes = data?.envelopes.filter((e) => isVisible(e.id)) ?? []
   const lastVisible = visibleEnvelopes.at(-1)
 
   function toggleEnvelope(id: number) {
-    setExcluded((prev) => {
+    setSelected((prev) => {
+      if (prev === null) return new Set([id]) // first tap → solo
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      if (next.size === 0) return null // nothing selected → back to all
       return next
     })
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <PageHeader title="Analytics" />
+      <PageHeader title="Analytics">
+        <PeriodPicker period={period} onChange={setPeriod} />
+      </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-7 py-6">
         {/* Summary */}
@@ -103,13 +114,15 @@ export function DashboardPage({ showNominal }: { showNominal: boolean }) {
               Daily Expenses
             </div>
             <div className="text-[12.5px] text-text-muted">
-              Last 30 days · stacked by envelope
+              {periodLabel(period)} · stacked by envelope
             </div>
           </div>
           <div className="text-right">
-            <div className="mb-1 text-[11px] text-text-muted">Total · 30 days</div>
+            <div className="mb-1 text-[11px] text-text-muted">
+              Total · {periodLabel(period)}
+            </div>
             <AmountText
-              amount={totalExpenses30d}
+              amount={totalPeriodExpenses}
               showNominal={showNominal}
               size="xl"
               tone="neutral"
@@ -119,9 +132,9 @@ export function DashboardPage({ showNominal }: { showNominal: boolean }) {
 
         {/* Legend */}
         {data && (
-          <div className="mb-5 flex flex-wrap gap-x-4 gap-y-1.5">
+          <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             {data.envelopes.map((env, i) => {
-              const active = !excluded.has(env.id)
+              const active = isVisible(env.id)
               const color = CHART_COLORS[i % CHART_COLORS.length]
               return (
                 <button
@@ -130,17 +143,25 @@ export function DashboardPage({ showNominal }: { showNominal: boolean }) {
                   aria-pressed={active}
                   aria-label={`${active ? "Hide" : "Show"} ${env.name}`}
                   className={`inline-flex items-center gap-1.5 text-[12px] font-medium transition-opacity ${
-                    active ? "text-text-secondary" : "text-text-muted line-through opacity-60"
+                    active ? "text-text-secondary" : "text-text-muted opacity-50"
                   }`}
                 >
                   <span
-                    className="inline-block size-2 rounded-sm"
-                    style={{ background: color }}
+                    className="inline-block size-2 rounded-sm transition-opacity"
+                    style={{ background: color, opacity: active ? 1 : 0.4 }}
                   />
                   {env.name}
                 </button>
               )
             })}
+            {selected !== null && (
+              <button
+                onClick={() => setSelected(null)}
+                className="inline-flex items-center gap-1 rounded-full bg-bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-text-secondary transition-colors hover:brightness-95"
+              >
+                Show all
+              </button>
+            )}
           </div>
         )}
 
@@ -187,7 +208,7 @@ export function DashboardPage({ showNominal }: { showNominal: boolean }) {
                   cursor={showNominal ? { fill: "var(--bg-muted)", opacity: 0.4 } : false}
                 />
                 {data?.envelopes.map((env, i) => {
-                  if (excluded.has(env.id)) return null
+                  if (!isVisible(env.id)) return null
                   return (
                     <Bar
                       key={env.id}
@@ -202,44 +223,6 @@ export function DashboardPage({ showNominal }: { showNominal: boolean }) {
             </ResponsiveContainer>
           )}
         </div>
-
-        {/* By category breakdown */}
-        {data && envelopeTotals.length > 0 && (
-          <div className="mt-6">
-            <div className="mb-3 font-heading text-[15px] font-bold text-text-primary">
-              By Category
-            </div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
-              {envelopeTotals.map((env, i) => {
-                const color = CHART_COLORS[i % CHART_COLORS.length]
-                return (
-                  <div
-                    key={env.id}
-                    className="rounded-xl border border-border bg-card p-4 shadow-xs"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="truncate text-[12.5px] font-semibold text-text-primary">
-                        {env.name}
-                      </span>
-                      <span className="text-[12.5px] font-semibold tabular-nums text-text-secondary">
-                        {showNominal ? `Rp ${(env.total / 1000).toFixed(0)}k` : "•••"}
-                      </span>
-                    </div>
-                    <div className="h-1 overflow-hidden rounded-sm bg-bg-muted">
-                      <div
-                        className="h-full rounded-sm transition-[width] duration-700"
-                        style={{
-                          width: `${(env.total / maxEnvTotal) * 100}%`,
-                          background: color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
 
         <div className="h-10" />
       </div>
