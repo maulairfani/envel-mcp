@@ -54,7 +54,7 @@ export function WishlistDetailDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            <span className="mr-2">{isBought ? "✅" : "🎯"}</span>
+            <span className="mr-2">{item.icon}</span>
             {item.name}
           </DialogTitle>
           <DialogDescription>

@@ -51,3 +51,8 @@ def _migrate(db: Database) -> None:
         # Backfill by id so existing order is stable when user first drags
         db._conn.execute("UPDATE envelopes SET sort_order = id WHERE sort_order = 0")
         db._conn.commit()
+
+    wishlist_cols = {row["name"] for row in db.fetchall("PRAGMA table_info(wishlist)")}
+    if "icon" not in wishlist_cols:
+        db._conn.execute("ALTER TABLE wishlist ADD COLUMN icon TEXT NOT NULL DEFAULT '🎁'")
+        db._conn.commit()

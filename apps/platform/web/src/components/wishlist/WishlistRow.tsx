@@ -35,7 +35,7 @@ export function WishlistRow({ item, showNominal, onClick }: WishlistRowProps) {
           isBought ? "bg-success-light" : "bg-bg-muted"
         }`}
       >
-        {isBought ? "✅" : "🎯"}
+        {item.icon}
       </div>
 
       <div className="min-w-0 flex-1">

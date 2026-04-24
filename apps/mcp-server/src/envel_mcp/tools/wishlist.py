@@ -1,12 +1,12 @@
 from envel_mcp.database import Database
 
 
-def add_wishlist_item(db: Database, name: str, price: float | None = None, priority: str = "medium", url: str | None = None, notes: str | None = None) -> dict:
+def add_wishlist_item(db: Database, name: str, icon: str, price: float | None = None, priority: str = "medium", url: str | None = None, notes: str | None = None) -> dict:
     id = db.execute(
-        "INSERT INTO wishlist (name, price, priority, url, notes) VALUES (?, ?, ?, ?, ?)",
-        (name, price, priority, url, notes),
+        "INSERT INTO wishlist (name, icon, price, priority, url, notes) VALUES (?, ?, ?, ?, ?, ?)",
+        (name, icon, price, priority, url, notes),
     )
-    return {"id": id, "name": name, "price": price, "priority": priority, "url": url, "notes": notes, "status": "wanted"}
+    return {"id": id, "name": name, "icon": icon, "price": price, "priority": priority, "url": url, "notes": notes, "status": "wanted"}
 
 
 def get_wishlist(db: Database, status: str | None = None) -> dict:
@@ -17,22 +17,23 @@ def get_wishlist(db: Database, status: str | None = None) -> dict:
     return {"items": rows, "total": len(rows)}
 
 
-def edit_wishlist_item(db: Database, id: int, name: str | None = None, price: float | None = None, priority: str | None = None, url: str | None = None, notes: str | None = None) -> dict:
+def edit_wishlist_item(db: Database, id: int, name: str | None = None, icon: str | None = None, price: float | None = None, priority: str | None = None, url: str | None = None, notes: str | None = None) -> dict:
     item = db.fetchone("SELECT * FROM wishlist WHERE id = ?", (id,))
     if not item:
         raise ValueError(f"Wishlist item id={id} not found")
 
     new_name     = name     if name     is not None else item["name"]
+    new_icon     = icon     if icon     is not None else item["icon"]
     new_price    = price    if price    is not None else item["price"]
     new_priority = priority if priority is not None else item["priority"]
     new_url      = url      if url      is not None else item["url"]
     new_notes    = notes    if notes    is not None else item["notes"]
 
     db.execute(
-        "UPDATE wishlist SET name = ?, price = ?, priority = ?, url = ?, notes = ? WHERE id = ?",
-        (new_name, new_price, new_priority, new_url, new_notes, id),
+        "UPDATE wishlist SET name = ?, icon = ?, price = ?, priority = ?, url = ?, notes = ? WHERE id = ?",
+        (new_name, new_icon, new_price, new_priority, new_url, new_notes, id),
     )
-    return {"id": id, "name": new_name, "price": new_price, "priority": new_priority, "url": new_url, "notes": new_notes, "status": item["status"]}
+    return {"id": id, "name": new_name, "icon": new_icon, "price": new_price, "priority": new_priority, "url": new_url, "notes": new_notes, "status": item["status"]}
 
 
 def mark_bought(db: Database, id: int) -> dict:
@@ -66,11 +67,11 @@ mcp = FastMCP("wishlist")
 
 
 @mcp.tool(name="add_wishlist_item")
-async def _add_wishlist_item_mcp(name: str, price: float | None = None, priority: str = "medium", url: str | None = None, notes: str | None = None, ctx: Context = CurrentContext()) -> dict:
-    """Add item to wishlist. priority: high | medium | low"""
-    await ctx.info(f"add_wishlist_item: name={name}, price={price}")
+async def _add_wishlist_item_mcp(name: str, icon: str, price: float | None = None, priority: str = "medium", url: str | None = None, notes: str | None = None, ctx: Context = CurrentContext()) -> dict:
+    """Add item to wishlist. `icon` is required — pick a relevant emoji (e.g. 💻, 🎧, 👟, 📱). priority: high | medium | low"""
+    await ctx.info(f"add_wishlist_item: name={name}, icon={icon}, price={price}")
     with get_user_db() as db:
-        return add_wishlist_item(db, name, price, priority, url, notes)
+        return add_wishlist_item(db, name, icon, price, priority, url, notes)
 
 
 @mcp.tool(name="get_wishlist")
@@ -82,11 +83,11 @@ async def _get_wishlist_mcp(status: str | None = None, ctx: Context = CurrentCon
 
 
 @mcp.tool(name="edit_wishlist_item")
-async def _edit_wishlist_item_mcp(id: int, name: str | None = None, price: float | None = None, priority: str | None = None, url: str | None = None, notes: str | None = None, ctx: Context = CurrentContext()) -> dict:
-    """Edit a wishlist item."""
+async def _edit_wishlist_item_mcp(id: int, name: str | None = None, icon: str | None = None, price: float | None = None, priority: str | None = None, url: str | None = None, notes: str | None = None, ctx: Context = CurrentContext()) -> dict:
+    """Edit a wishlist item. Any field can be updated, including icon."""
     await ctx.info(f"edit_wishlist_item: id={id}")
     with get_user_db() as db:
-        return edit_wishlist_item(db, id, name, price, priority, url, notes)
+        return edit_wishlist_item(db, id, name, icon, price, priority, url, notes)
 
 
 @mcp.tool(name="mark_bought")

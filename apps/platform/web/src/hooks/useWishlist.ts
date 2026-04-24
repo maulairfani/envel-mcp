@@ -7,6 +7,7 @@ export type WishlistStatus = "wanted" | "bought"
 export interface WishlistItem {
   id: number
   name: string
+  icon: string
   price: number | null
   priority: Priority
   url: string | null

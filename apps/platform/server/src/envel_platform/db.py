@@ -46,6 +46,10 @@ def _ensure_migrated(conn: sqlite3.Connection, path: str) -> None:
         conn.execute("ALTER TABLE envelopes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
         conn.execute("UPDATE envelopes SET sort_order = id WHERE sort_order = 0")
         conn.commit()
+    wishlist_cols = {r["name"] for r in conn.execute("PRAGMA table_info(wishlist)").fetchall()}
+    if "icon" not in wishlist_cols:
+        conn.execute("ALTER TABLE wishlist ADD COLUMN icon TEXT NOT NULL DEFAULT '🎁'")
+        conn.commit()
     _MIGRATED.add(path)
 
 
@@ -276,7 +280,7 @@ def get_wishlist(username: str, status: str | None = None) -> list[dict]:
         params.append(status)
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     sql = f"""
-        SELECT id, name, price, priority, url, notes, status,
+        SELECT id, name, icon, price, priority, url, notes, status,
                created_at AS createdAt
         FROM wishlist
         {where}

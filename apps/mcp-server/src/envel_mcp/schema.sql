@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS scheduled_transactions (
 CREATE TABLE IF NOT EXISTS wishlist (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL,
+    icon       TEXT NOT NULL DEFAULT '🎁',
     price      REAL,
     priority   TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('high', 'medium', 'low')),
     url        TEXT,
