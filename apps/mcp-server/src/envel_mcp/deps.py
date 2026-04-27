@@ -4,6 +4,7 @@ import os
 import sqlite3
 from contextlib import contextmanager
 from contextvars import ContextVar
+from datetime import date
 
 from envel_mcp.database import Database, init_db
 
@@ -61,3 +62,69 @@ def get_user_db():
         yield db
     finally:
         db.close()
+
+
+# ─── Morning briefing piggyback ─────────────────────────────────────────────
+#
+# Fires once per day. The hint is attached to a tool's response by calling
+# `attach_briefing_hint(db, result)` at the end of a tool wrapper. The first
+# tool call of the day stamps `morning_briefing_last_shown=today` so later
+# calls in the same day stay quiet.
+
+_BRIEFING_SETUP_HINT = (
+    "Daily briefing is enabled but the user hasn't configured what to include yet. "
+    "Before answering their request, briefly tell them this feature exists, ask 1-2 "
+    "questions about what they want each morning (e.g. which budgets to monitor, "
+    "whether to recap yesterday, scheduled transactions to flag), summarize their "
+    "answer into a clear instruction, and save it via the `set_morning_briefing` "
+    "tool. Keep the conversation short — a couple of exchanges at most."
+)
+
+
+def _briefing_run_hint(prompt: str) -> str:
+    return (
+        "Daily briefing time. Before answering the user's actual request, "
+        "execute the following user-defined briefing instruction by calling "
+        "whatever envel tools you need, then narrate the result concisely:\n\n"
+        f"---\n{prompt}\n---\n\n"
+        "After the briefing, continue with the user's original message."
+    )
+
+
+def _check_briefing_due(db: Database) -> str | None:
+    row = db.fetchone(
+        """
+        SELECT morning_briefing_enabled    AS enabled,
+               morning_briefing_prompt     AS prompt,
+               morning_briefing_last_shown AS last_shown
+        FROM user_settings WHERE id = 1
+        """
+    )
+    if not row or not row["enabled"]:
+        return None
+    today = date.today().isoformat()
+    if row["last_shown"] == today:
+        return None
+    # Stamp first so concurrent calls don't double-fire.
+    db.execute(
+        "UPDATE user_settings SET morning_briefing_last_shown = ? WHERE id = 1",
+        (today,),
+    )
+    if not row["prompt"]:
+        return _BRIEFING_SETUP_HINT
+    return _briefing_run_hint(row["prompt"])
+
+
+def attach_briefing_hint(db: Database, result):
+    """If today's briefing hasn't fired yet, attach a hint to a dict result.
+
+    No-op for non-dict results (lists, scalars). Use this at the end of a tool
+    wrapper that returns a dict — the AI client reads `_assistant_hint` and
+    acts on it before continuing with the user's request.
+    """
+    if not isinstance(result, dict):
+        return result
+    hint = _check_briefing_due(db)
+    if hint:
+        result["_assistant_hint"] = hint
+    return result

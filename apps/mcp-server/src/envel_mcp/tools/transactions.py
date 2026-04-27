@@ -200,7 +200,7 @@ def get_transactions(
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import CurrentContext
-from envel_mcp.deps import get_user_db
+from envel_mcp.deps import attach_briefing_hint, get_user_db
 
 mcp = FastMCP("transactions")
 
@@ -227,7 +227,7 @@ async def _add_transaction_mcp(
     """
     await ctx.info(f"add_transaction: {type} {amount} envelope={envelope_id} payee={payee}")
     with get_user_db() as db:
-        return add_transaction(db, amount, type, account_id, memo, envelope_id, to_account_id, payee, transaction_date)
+        return attach_briefing_hint(db, add_transaction(db, amount, type, account_id, memo, envelope_id, to_account_id, payee, transaction_date))
 
 
 @mcp.tool(name="get_transactions")
@@ -266,7 +266,7 @@ async def _edit_transaction_mcp(
     """Edit an existing transaction. Only provide fields you want to change."""
     await ctx.info(f"edit_transaction: id={id}")
     with get_user_db() as db:
-        return edit_transaction(db, id, amount, type, account_id, envelope_id, to_account_id, payee, memo, transaction_date)
+        return attach_briefing_hint(db, edit_transaction(db, id, amount, type, account_id, envelope_id, to_account_id, payee, memo, transaction_date))
 
 
 @mcp.tool(name="delete_transaction")
@@ -274,4 +274,4 @@ async def _delete_transaction_mcp(id: int, ctx: Context = CurrentContext()) -> d
     """Delete a transaction and reverse its effect on account balance."""
     await ctx.info(f"delete_transaction: id={id}")
     with get_user_db() as db:
-        return delete_transaction(db, id)
+        return attach_briefing_hint(db, delete_transaction(db, id))

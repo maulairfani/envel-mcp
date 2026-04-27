@@ -391,7 +391,7 @@ def get_envelopes(db: Database, period: str | None = None, include_archived: boo
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import CurrentContext
-from envel_mcp.deps import get_user_db
+from envel_mcp.deps import attach_briefing_hint, get_user_db
 
 mcp = FastMCP("envelopes")
 
@@ -423,7 +423,7 @@ async def _get_envelopes_mcp(period: str | None = None, include_archived: bool =
     """
     await ctx.info(f"get_envelopes: period={period}, include_archived={include_archived}")
     with get_user_db() as db:
-        return get_envelopes(db, period, include_archived)
+        return attach_briefing_hint(db, get_envelopes(db, period, include_archived))
 
 
 @mcp.tool(name="add_envelope")

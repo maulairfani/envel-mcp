@@ -17,6 +17,7 @@ from envel_mcp.prompts.onboarding import mcp as _onboarding_prompts_mcp
 from envel_mcp.tools.accounts import mcp as _accounts_mcp
 from envel_mcp.tools.analytics import mcp as _analytics_mcp
 from envel_mcp.tools.apps import mcp as _apps_mcp
+from envel_mcp.tools.briefing import mcp as _briefing_mcp
 from envel_mcp.tools.envelopes import mcp as _envelopes_mcp
 from envel_mcp.tools.scheduled import mcp as _scheduled_mcp
 from envel_mcp.tools.tags import mcp as _tags_mcp
@@ -140,6 +141,7 @@ mcp.mount(_analytics_mcp,    namespace="envel")
 mcp.mount(_apps_mcp)
 mcp.mount(_wishlist_mcp,     namespace="envel")
 mcp.mount(_tags_mcp,         namespace="envel")
+mcp.mount(_briefing_mcp,     namespace="envel")
 mcp.mount(_memory_mcp,       namespace="envel")
 mcp.mount(_budget_prompts_mcp)
 mcp.mount(_onboarding_prompts_mcp)

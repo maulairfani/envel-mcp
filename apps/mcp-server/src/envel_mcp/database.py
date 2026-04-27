@@ -74,4 +74,13 @@ def _migrate(db: Database) -> None:
     db._conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag ON transaction_tags(tag_id)"
     )
+    db._conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_settings (
+            id                          INTEGER PRIMARY KEY CHECK (id = 1),
+            morning_briefing_enabled    INTEGER NOT NULL DEFAULT 1,
+            morning_briefing_prompt     TEXT,
+            morning_briefing_last_shown TEXT
+        )
+    """)
+    db._conn.execute("INSERT OR IGNORE INTO user_settings (id) VALUES (1)")
     db._conn.commit()

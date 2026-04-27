@@ -241,7 +241,7 @@ def get_onboarding_status(db: Database) -> dict:
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import CurrentContext
-from envel_mcp.deps import get_user_db
+from envel_mcp.deps import attach_briefing_hint, get_user_db
 
 mcp = FastMCP("analytics")
 
@@ -266,7 +266,7 @@ async def _get_ready_to_assign_mcp(period: str | None = None, ctx: Context = Cur
     """
     await ctx.info(f"get_ready_to_assign: period={period}")
     with get_user_db() as db:
-        return get_ready_to_assign(db, period)
+        return attach_briefing_hint(db, get_ready_to_assign(db, period))
 
 
 @mcp.tool(name="get_age_of_money")
@@ -285,7 +285,7 @@ async def _get_summary_mcp(period: str | None = None, ctx: Context = CurrentCont
     """Monthly summary: income, expense, net, breakdown per envelope. period: YYYY-MM."""
     await ctx.info(f"get_summary: period={period}")
     with get_user_db() as db:
-        return get_summary(db, period)
+        return attach_briefing_hint(db, get_summary(db, period))
 
 
 @mcp.tool(name="get_spending_trend")

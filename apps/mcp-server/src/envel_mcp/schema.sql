@@ -109,3 +109,13 @@ CREATE TABLE IF NOT EXISTS user_memory (
 );
 INSERT OR IGNORE INTO user_memory (id, content) VALUES (1, '');
 
+-- Single-row settings. Keep here to avoid a generic key-value table for
+-- now; columns can grow as more user-tunable behaviors land.
+CREATE TABLE IF NOT EXISTS user_settings (
+    id                            INTEGER PRIMARY KEY CHECK (id = 1),
+    morning_briefing_enabled      INTEGER NOT NULL DEFAULT 1,
+    morning_briefing_prompt       TEXT,
+    morning_briefing_last_shown   TEXT
+);
+INSERT OR IGNORE INTO user_settings (id) VALUES (1);
+
