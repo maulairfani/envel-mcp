@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react"
 import { AmountText } from "@/components/shared/AmountText"
 import type { Transaction } from "@/hooks/useTransactions"
 
@@ -8,18 +9,14 @@ const TYPE_FALLBACK: Record<string, string> = {
 }
 
 /**
- * Deterministic color per label using a small cycle of hues.
- * Picks from the chart palette so pills feel brand-consistent.
+ * Deterministic hue per label. Actual colors are resolved by the
+ * `.hue-pill` class in index.css so light/dark themes stay in sync.
  */
 const PILL_HUES = [145, 200, 270, 310, 50, 25, 175, 240]
-function pillStyle(label: string): { background: string; color: string } {
+function pillHue(label: string): number {
   let h = 0
   for (const ch of label) h = (h * 31 + ch.charCodeAt(0)) >>> 0
-  const hue = PILL_HUES[h % PILL_HUES.length]
-  return {
-    background: `oklch(70% 0.08 ${hue} / 0.2)`,
-    color: `oklch(38% 0.14 ${hue})`,
-  }
+  return PILL_HUES[h % PILL_HUES.length]
 }
 
 interface TransactionRowProps {
@@ -82,8 +79,8 @@ export function TransactionRow({ transaction, showNominal }: TransactionRowProps
       <div className="hidden md:block">
         {envelope ? (
           <span
-            className="inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
-            style={pillStyle(envelope)}
+            className="hue-pill inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
+            style={{ "--pill-h": pillHue(envelope) } as CSSProperties}
           >
             {envelope}
           </span>
@@ -96,8 +93,8 @@ export function TransactionRow({ transaction, showNominal }: TransactionRowProps
       <div className="hidden md:block">
         {account ? (
           <span
-            className="inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
-            style={pillStyle(account)}
+            className="hue-pill inline-flex items-center rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
+            style={{ "--pill-h": pillHue(account) } as CSSProperties}
           >
             {account}
           </span>

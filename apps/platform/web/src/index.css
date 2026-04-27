@@ -233,6 +233,16 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Hue-cycled pill (envelope/account chips). Hue passed via --pill-h. */
+  .hue-pill {
+    background: oklch(70% 0.08 var(--pill-h) / 0.2);
+    color: oklch(38% 0.14 var(--pill-h));
+  }
+  .dark .hue-pill {
+    background: oklch(45% 0.1 var(--pill-h) / 0.35);
+    color: oklch(82% 0.13 var(--pill-h));
+  }
 }
 
 @keyframes page-in {
