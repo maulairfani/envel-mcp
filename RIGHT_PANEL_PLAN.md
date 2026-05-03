@@ -62,7 +62,7 @@ Semua aksi punya feedback: loading spinner → success checkmark (1.5s) → idle
 
 ---
 
-## Wishlist (belum)
+## Wishlist ✅ (done)
 
 **Empty state:**
 - Total estimated price semua item "wanted"

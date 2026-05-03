@@ -438,6 +438,69 @@ def add_envelope(
     return dict(row)
 
 
+def edit_wishlist_item(
+    username: str,
+    item_id: int,
+    name: str | None = None,
+    icon: str | None = None,
+    price: float | None = None,
+    priority: str | None = None,
+    url: str | None = None,
+    notes: str | None = None,
+) -> dict:
+    with get_conn(username) as conn:
+        cur = conn.execute(
+            """SELECT id, name, icon, price, priority, url, notes
+               FROM wishlist WHERE id = ?""",
+            (item_id,),
+        ).fetchone()
+        if not cur:
+            raise ValueError(f"Wishlist item id={item_id} not found")
+        new = {
+            "name": name if name is not None else cur["name"],
+            "icon": icon if icon is not None else cur["icon"],
+            "price": price if price is not None else cur["price"],
+            "priority": priority if priority is not None else cur["priority"],
+            "url": url if url is not None else cur["url"],
+            "notes": notes if notes is not None else cur["notes"],
+        }
+        conn.execute(
+            """UPDATE wishlist
+               SET name = ?, icon = ?, price = ?, priority = ?, url = ?, notes = ?
+               WHERE id = ?""",
+            (new["name"], new["icon"], new["price"], new["priority"], new["url"], new["notes"], item_id),
+        )
+        conn.commit()
+        row = conn.execute(
+            """SELECT id, name, icon, price, priority, url, notes, status,
+                      created_at AS createdAt
+               FROM wishlist WHERE id = ?""",
+            (item_id,),
+        ).fetchone()
+    return dict(row)
+
+
+def mark_wishlist_bought(username: str, item_id: int) -> dict:
+    with get_conn(username) as conn:
+        conn.execute(
+            "UPDATE wishlist SET status = 'bought' WHERE id = ?", (item_id,)
+        )
+        conn.commit()
+        row = conn.execute(
+            """SELECT id, name, icon, price, priority, url, notes, status,
+                      created_at AS createdAt
+               FROM wishlist WHERE id = ?""",
+            (item_id,),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def delete_wishlist_item(username: str, item_id: int) -> None:
+    with get_conn(username) as conn:
+        conn.execute("DELETE FROM wishlist WHERE id = ?", (item_id,))
+        conn.commit()
+
+
 def add_wishlist_item(
     username: str,
     name: str,

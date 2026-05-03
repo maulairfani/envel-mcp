@@ -113,3 +113,50 @@ export function useCreateWishlistItem() {
     },
   })
 }
+
+export function useEditWishlistItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number
+      name?: string
+      icon?: string
+      price?: number | null
+      priority?: Priority
+      url?: string | null
+      notes?: string | null
+    }) =>
+      api(`/api/wishlist/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] })
+    },
+  })
+}
+
+export function useMarkWishlistBought() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      api(`/api/wishlist/${id}/bought`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] })
+    },
+  })
+}
+
+export function useDeleteWishlistItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      api(`/api/wishlist/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] })
+    },
+  })
+}

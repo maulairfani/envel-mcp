@@ -65,7 +65,7 @@ const FAB_BY_ROUTE: Record<string, FabConfig> = {
     label: "New wishlist item",
     title: "Add wishlist item",
     Form: AddWishlistForm,
-    hasRightPanel: false,
+    hasRightPanel: true,
   },
 }
 

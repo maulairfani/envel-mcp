@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from envel_platform.auth import require_user
-from envel_platform.db import add_wishlist_item, get_wishlist
+from envel_platform.db import (
+    add_wishlist_item,
+    delete_wishlist_item,
+    edit_wishlist_item,
+    get_wishlist,
+    mark_wishlist_bought,
+)
 
 router = APIRouter()
 
@@ -12,6 +18,15 @@ class WishlistCreate(BaseModel):
     icon: str | None = None
     price: float | None = None
     priority: str = "medium"
+    url: str | None = None
+    notes: str | None = None
+
+
+class WishlistEdit(BaseModel):
+    name: str | None = None
+    icon: str | None = None
+    price: float | None = None
+    priority: str | None = None
     url: str | None = None
     notes: str | None = None
 
@@ -49,3 +64,31 @@ async def create_wishlist_item(
         body.url,
         body.notes,
     )
+
+
+@router.patch("/{item_id}")
+async def update_wishlist_item(
+    item_id: int,
+    body: WishlistEdit,
+    username: str = Depends(require_user),
+):
+    return edit_wishlist_item(
+        username,
+        item_id,
+        body.name,
+        body.icon,
+        body.price,
+        body.priority,
+        body.url,
+        body.notes,
+    )
+
+
+@router.post("/{item_id}/bought")
+async def mark_bought(item_id: int, username: str = Depends(require_user)):
+    return mark_wishlist_bought(username, item_id)
+
+
+@router.delete("/{item_id}", status_code=204)
+async def remove_wishlist_item(item_id: int, username: str = Depends(require_user)):
+    delete_wishlist_item(username, item_id)
