@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
-import { Loader2 } from "lucide-react"
+import { Eye, EyeOff, Loader2 } from "lucide-react"
 import { LogoMark } from "@/components/shared/LogoMark"
 import { useAuth } from "@/hooks/useAuth"
 
@@ -8,6 +8,7 @@ export function LoginForm() {
   const { login } = useAuth()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -96,17 +97,32 @@ export function LoginForm() {
             >
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              placeholder="••••••••"
-              className="w-full rounded-[10px] border-[1.5px] border-border bg-bg px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-placeholder transition-colors focus:border-brand focus:outline-none disabled:opacity-60"
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                placeholder="••••••••"
+                className="w-full rounded-[10px] border-[1.5px] border-border bg-bg py-2.5 pl-3.5 pr-10 text-sm text-text-primary placeholder:text-text-placeholder transition-colors focus:border-brand focus:outline-none disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                disabled={loading}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-muted hover:text-text-secondary disabled:opacity-50"
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {error && (

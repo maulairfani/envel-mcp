@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Check, Loader2, X } from "lucide-react"
+import { Check, Eye, EyeOff, Loader2, X } from "lucide-react"
 import { LogoMark } from "@/components/shared/LogoMark"
 import { useAuth } from "@/hooks/useAuth"
 
@@ -36,6 +36,8 @@ export function SignupForm() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -217,17 +219,24 @@ export function SignupForm() {
 
           {/* Password */}
           <Field label="Password" htmlFor="password">
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={submitting}
-              placeholder="••••••••"
-              className={inputClass}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={submitting}
+                placeholder="••••••••"
+                className={passwordInputClass}
+              />
+              <PasswordToggle
+                shown={showPassword}
+                disabled={submitting}
+                onToggle={() => setShowPassword((v) => !v)}
+              />
+            </div>
             {password.length > 0 && (
               <div className="mt-1.5 flex flex-col gap-0.5">
                 <Rule ok={pwLongEnough} text="At least 8 characters" />
@@ -239,17 +248,24 @@ export function SignupForm() {
 
           {/* Confirm password */}
           <Field label="Confirm password" htmlFor="confirm">
-            <input
-              id="confirm"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              disabled={submitting}
-              placeholder="••••••••"
-              className={inputClass}
-            />
+            <div className="relative">
+              <input
+                id="confirm"
+                type={showConfirm ? "text" : "password"}
+                required
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                disabled={submitting}
+                placeholder="••••••••"
+                className={passwordInputClass}
+              />
+              <PasswordToggle
+                shown={showConfirm}
+                disabled={submitting}
+                onToggle={() => setShowConfirm((v) => !v)}
+              />
+            </div>
             {confirm.length > 0 && !confirmMatches && (
               <FieldError>Passwords don't match.</FieldError>
             )}
@@ -288,6 +304,31 @@ export function SignupForm() {
 
 const inputClass =
   "w-full rounded-[10px] border-[1.5px] border-border bg-bg px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-placeholder transition-colors focus:border-brand focus:outline-none disabled:opacity-60"
+
+const passwordInputClass =
+  "w-full rounded-[10px] border-[1.5px] border-border bg-bg py-2.5 pl-3.5 pr-10 text-sm text-text-primary placeholder:text-text-placeholder transition-colors focus:border-brand focus:outline-none disabled:opacity-60"
+
+function PasswordToggle({
+  shown,
+  disabled,
+  onToggle,
+}: {
+  shown: boolean
+  disabled: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      aria-label={shown ? "Hide password" : "Show password"}
+      className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-bg-muted hover:text-text-secondary disabled:opacity-50"
+    >
+      {shown ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+    </button>
+  )
+}
 
 function Field({
   label,
