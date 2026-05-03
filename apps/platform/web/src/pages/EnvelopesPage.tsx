@@ -25,6 +25,7 @@ import {
   type EnvelopeBudget,
   type EnvelopeGroupWithBudgets,
 } from "@/hooks/useEnvelopes"
+import { useAccounts } from "@/hooks/useAccounts"
 import { PeriodPicker, currentPeriod } from "@/components/shared/PeriodPicker"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { AmountText } from "@/components/shared/AmountText"
@@ -38,6 +39,7 @@ export function EnvelopesPage({ showNominal }: { showNominal: boolean }) {
     period,
     { includeArchived }
   )
+  const { totalBalance } = useAccounts()
   const queryClient = useQueryClient()
   const reorderEnvelopes = useReorderEnvelopes(period)
   const reorderGroups = useReorderEnvelopeGroups(period)
@@ -90,6 +92,8 @@ export function EnvelopesPage({ showNominal }: { showNominal: boolean }) {
     () => currentItems.reduce((s, i) => s + i.budget.available, 0),
     [currentItems]
   )
+  const readyToAssign = totalBalance - totalAvailable
+  const showReadyToAssign = Math.abs(readyToAssign) >= 1
 
   const donors = useMemo(
     () =>
@@ -304,6 +308,40 @@ export function EnvelopesPage({ showNominal }: { showNominal: boolean }) {
       <PageHeader title="Envelopes">
         <PeriodPicker period={period} onChange={handlePeriodChange} />
       </PageHeader>
+
+      {showReadyToAssign && (
+        <div
+          className={`flex flex-shrink-0 items-center justify-between gap-4 border-b px-7 py-3 ${
+            readyToAssign > 0
+              ? "border-brand/30 bg-brand-light"
+              : "border-[color:var(--danger)]/30 bg-danger-light"
+          }`}
+        >
+          <div className="min-w-0">
+            <p
+              className={`mb-0.5 text-[11px] font-semibold uppercase ${
+                readyToAssign > 0
+                  ? "text-brand-text"
+                  : "text-[color:var(--danger)]"
+              }`}
+            >
+              Ready to assign
+            </p>
+            <p className="truncate text-[12.5px] text-text-secondary">
+              {readyToAssign > 0
+                ? "Give this money a job before planning is done."
+                : "Envelope assignments exceed your account balance."}
+            </p>
+          </div>
+          <AmountText
+            amount={readyToAssign}
+            showNominal={showNominal}
+            size="xl"
+            tone={readyToAssign < 0 ? "auto" : "neutral"}
+            className="shrink-0"
+          />
+        </div>
+      )}
 
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-card px-7 py-3">
         <div>
