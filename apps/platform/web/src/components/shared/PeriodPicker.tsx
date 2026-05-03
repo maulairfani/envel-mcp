@@ -26,6 +26,7 @@ function formatPeriod(year: number, month: number): string {
 
 export function PeriodPicker({ period, onChange }: PeriodPickerProps) {
   const { year, month } = parsePeriod(period)
+  const yearOptions = Array.from({ length: 11 }, (_, idx) => year - 5 + idx)
 
   function shift(delta: number) {
     let m = month + delta
@@ -35,8 +36,13 @@ export function PeriodPicker({ period, onChange }: PeriodPickerProps) {
     onChange(formatPeriod(y, m))
   }
 
-  const labelFull = `${MONTHS[month - 1]} ${year}`
-  const labelShort = `${MONTHS_SHORT[month - 1]} ${year}`
+  function selectMonth(nextMonth: string) {
+    onChange(formatPeriod(year, Number(nextMonth)))
+  }
+
+  function selectYear(nextYear: string) {
+    onChange(formatPeriod(Number(nextYear), month))
+  }
 
   return (
     <div className="flex items-center gap-0.5 sm:gap-1">
@@ -47,10 +53,32 @@ export function PeriodPicker({ period, onChange }: PeriodPickerProps) {
       >
         <ChevronLeft className="size-4" />
       </button>
-      <span className="min-w-[72px] text-center text-xs font-heading font-semibold sm:min-w-[140px] sm:text-sm">
-        <span className="sm:hidden">{labelShort}</span>
-        <span className="hidden sm:inline">{labelFull}</span>
-      </span>
+      <div className="flex h-8 items-center rounded-lg border border-border bg-bg-muted px-1">
+        <select
+          value={month}
+          onChange={(e) => selectMonth(e.target.value)}
+          aria-label="Select month"
+          className="h-7 w-[58px] rounded-md bg-transparent px-1 text-center text-xs font-heading font-semibold text-text-primary outline-none transition-colors hover:bg-card sm:w-[92px] sm:text-sm"
+        >
+          {MONTHS.map((name, idx) => (
+            <option key={name} value={idx + 1}>
+              {MONTHS_SHORT[idx]}
+            </option>
+          ))}
+        </select>
+        <select
+          value={year}
+          onChange={(e) => selectYear(e.target.value)}
+          aria-label="Select year"
+          className="h-7 w-[66px] rounded-md bg-transparent px-1 text-center text-xs font-heading font-semibold text-text-primary outline-none transition-colors hover:bg-card sm:w-[78px] sm:text-sm"
+        >
+          {yearOptions.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
       <button
         onClick={() => shift(1)}
         className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:size-8"
