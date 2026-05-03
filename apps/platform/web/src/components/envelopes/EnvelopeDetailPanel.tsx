@@ -21,6 +21,7 @@ interface EnvelopeDetailPanelProps {
   envelope: Envelope | null
   budget: EnvelopeBudget | null
   period: string
+  isPastPeriod: boolean
   onClose: () => void
   donors: { envelope: Envelope; budget: EnvelopeBudget }[]
   onCover: (fromEnvelopeId: number, amount: number) => void
@@ -34,6 +35,7 @@ export function EnvelopeDetailPanel({
   envelope,
   budget,
   period,
+  isPastPeriod,
   onClose,
   donors,
   onCover,
@@ -42,6 +44,7 @@ export function EnvelopeDetailPanel({
   onAssign,
 }: EnvelopeDetailPanelProps) {
   if (!envelope || !budget) {
+    if (isPastPeriod) return <HistoricalEmptyState />
     return <EmptyState readyToAssign={readyToAssign} allItems={allItems} onAssign={onAssign} />
   }
 
@@ -94,13 +97,15 @@ export function EnvelopeDetailPanel({
           </div>
         </div>
 
-        {/* Assign */}
-        <AssignSection
-          key={`assign-${envelope.id}`}
-          envelopeId={envelope.id}
-          budget={budget}
-          period={period}
-        />
+        {/* Assign — only for current/future periods */}
+        {!isPastPeriod && (
+          <AssignSection
+            key={`assign-${envelope.id}`}
+            envelopeId={envelope.id}
+            budget={budget}
+            period={period}
+          />
+        )}
 
         {/* Cover overspent */}
         {overspent && (
@@ -221,6 +226,24 @@ function AssignSection({
             "Save"
           )}
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Historical empty state ────────────────────────────────────────────────────
+
+function HistoricalEmptyState() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg-muted">
+        <span className="text-xl">🗓️</span>
+      </div>
+      <div>
+        <p className="text-[13px] font-semibold text-text-primary">Past period</p>
+        <p className="mt-1 text-[12px] text-text-muted">
+          Click an envelope to view its historical budget breakdown.
+        </p>
       </div>
     </div>
   )

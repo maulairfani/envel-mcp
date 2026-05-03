@@ -94,8 +94,9 @@ export function EnvelopesPage({ showNominal }: { showNominal: boolean }) {
     () => currentItems.reduce((s, i) => s + i.budget.available, 0),
     [currentItems]
   )
+  const isPastPeriod = period < currentPeriod()
   const readyToAssign = totalBalance - totalAvailable
-  const showReadyToAssign = Math.abs(readyToAssign) >= 1
+  const showReadyToAssign = Math.abs(readyToAssign) >= 1 && !isPastPeriod
 
   const donors = useMemo(
     () =>
@@ -416,6 +417,7 @@ export function EnvelopesPage({ showNominal }: { showNominal: boolean }) {
           envelope={selectedItem?.envelope ?? null}
           budget={selectedItem?.budget ?? null}
           period={period}
+          isPastPeriod={isPastPeriod}
           onClose={() => setSelectedEnvelopeId(null)}
           donors={donors}
           onCover={handleCover}
