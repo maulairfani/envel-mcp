@@ -23,7 +23,7 @@ Semua aksi punya feedback: loading spinner → success checkmark (1.5s) → idle
 
 ---
 
-## Transactions (belum)
+## Transactions ✅ (done)
 
 **Empty state:**
 - Filter aktif ringkas (period, akun, envelope)

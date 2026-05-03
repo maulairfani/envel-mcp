@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from envel_platform.auth import require_user
-from envel_platform.db import create_transaction, get_transactions, set_transaction_tags
+from envel_platform.db import (
+    create_transaction,
+    edit_transaction,
+    delete_transaction,
+    get_transactions,
+    set_transaction_tags,
+)
 
 router = APIRouter()
 
@@ -59,6 +65,41 @@ async def add_transaction(
         to_account_id=body.to_account_id,
         date=body.date,
     )
+
+
+class TransactionEdit(BaseModel):
+    amount: float | None = None
+    payee: str | None = None
+    memo: str | None = None
+    date: str | None = None
+    envelope_id: int | None = None
+    clear_envelope: bool = False
+
+
+@router.patch("/{transaction_id}")
+async def update_transaction(
+    transaction_id: int,
+    body: TransactionEdit,
+    username: str = Depends(require_user),
+):
+    return edit_transaction(
+        username,
+        transaction_id,
+        amount=body.amount,
+        payee=body.payee,
+        memo=body.memo,
+        date=body.date,
+        envelope_id=body.envelope_id,
+        clear_envelope=body.clear_envelope,
+    )
+
+
+@router.delete("/{transaction_id}", status_code=204)
+async def remove_transaction(
+    transaction_id: int,
+    username: str = Depends(require_user),
+):
+    delete_transaction(username, transaction_id)
 
 
 @router.put("/{transaction_id}/tags")

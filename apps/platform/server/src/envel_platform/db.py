@@ -172,6 +172,61 @@ def create_transaction(
     return dict(row)
 
 
+def edit_transaction(
+    username: str,
+    transaction_id: int,
+    amount: float | None = None,
+    payee: str | None = None,
+    memo: str | None = None,
+    date: str | None = None,
+    envelope_id: int | None = None,
+    clear_envelope: bool = False,
+) -> dict:
+    sets = []
+    params: list = []
+    if amount is not None:
+        sets.append("amount = ?")
+        params.append(amount)
+    if payee is not None:
+        sets.append("payee = ?")
+        params.append(payee)
+    if memo is not None:
+        sets.append("memo = ?")
+        params.append(memo)
+    if date is not None:
+        sets.append("date = ?")
+        params.append(date)
+    if clear_envelope:
+        sets.append("envelope_id = NULL")
+    elif envelope_id is not None:
+        sets.append("envelope_id = ?")
+        params.append(envelope_id)
+    if not sets:
+        raise ValueError("Nothing to update")
+    params.append(transaction_id)
+    sql = f"UPDATE transactions SET {', '.join(sets)} WHERE id = ?"
+    with get_conn(username) as conn:
+        conn.execute(sql, params)
+        conn.commit()
+        row = conn.execute(
+            """SELECT t.id, t.date, t.type, t.amount, t.payee, t.memo,
+                      t.account_id, t.envelope_id, t.to_account_id,
+                      a.name AS account_name, e.name AS envelope_name, e.icon AS envelope_icon
+               FROM transactions t
+               LEFT JOIN accounts a ON t.account_id = a.id
+               LEFT JOIN envelopes e ON t.envelope_id = e.id
+               WHERE t.id = ?""",
+            (transaction_id,),
+        ).fetchone()
+    return dict(row)
+
+
+def delete_transaction(username: str, transaction_id: int) -> None:
+    with get_conn(username) as conn:
+        conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        conn.commit()
+
+
 def get_envelope_status(
     username: str, period: str, include_archived: bool = False
 ) -> list[dict]:
@@ -355,6 +410,7 @@ def get_transactions(
     sql = f"""
         SELECT
             t.id, t.date, t.type, t.amount, t.payee, t.memo,
+            t.account_id, t.envelope_id, t.to_account_id,
             a.name AS account_name,
             ta.name AS to_account_name,
             e.name AS envelope_name,

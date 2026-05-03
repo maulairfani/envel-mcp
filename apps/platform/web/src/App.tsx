@@ -15,6 +15,7 @@ import { LoginPage } from "@/pages/LoginPage"
 import { SignupPage } from "@/pages/SignupPage"
 import { SignupConfirmPage } from "@/pages/SignupConfirmPage"
 import { ConnectPage } from "@/pages/ConnectPage"
+import { AddTransactionFAB } from "@/components/transactions/AddTransactionFAB"
 
 export default function App() {
   const { authenticated, loading } = useAuth()
@@ -67,6 +68,7 @@ function ChromedApp() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/envelopes" replace />} />
         </Routes>
+        <AddTransactionFAB />
       </SidebarInset>
     </SidebarProvider>
   )
